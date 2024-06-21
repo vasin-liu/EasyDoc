@@ -8,9 +8,11 @@ package org.gensokyo.plugin.easydoc.dto;
 import com.intellij.database.model.DasDataSource;
 import com.intellij.database.psi.DbDataSource;
 import lombok.Data;
+import org.gensokyo.plugin.easydoc.kit.DbKit;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 数据源对象对象
@@ -31,6 +33,7 @@ public class DataSourceDTO implements Item<DataSourceDTO> {
         this.comment = ds.getComment();
         this.dialect = ds.getDatabaseDialect().getDisplayName();
         this.version = ds.getDatabaseVersion().version;
+        resolve(ds);
     }
 
     public DataSourceDTO(DasDataSource ds) {
@@ -39,6 +42,16 @@ public class DataSourceDTO implements Item<DataSourceDTO> {
         this.comment = ds.getComment();
         this.dialect = ds.getDbms().getDisplayName();
         this.version = ds.getDatabaseVersion().version;
+    }
+
+    private void resolve(DbDataSource ds) {
+        if (DbKit.needReResolve(this.dialect)) {
+            DbMeta dbMeta = DbKit.resolve(ds);
+            if (Objects.nonNull(dbMeta)) {
+                this.dialect = dbMeta.dialect();
+                this.version = dbMeta.version();
+            }
+        }
     }
 
     private DasDataSource das;

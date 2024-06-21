@@ -22,6 +22,7 @@ import java.util.Objects;
  * @since 2024/6/14 , Version 1.0.0
  */
 public class DocKit {
+    private static final Logger LOG = Logger.getInstance(DocKit.class);
 
     private DocKit() {
         throw new UnsupportedOperationException();
@@ -36,7 +37,7 @@ public class DocKit {
                 //目录
                 .bind("toc", new TOCRenderPolicy())
                 .useSpringEL()
-                .setValidErrorHandler(handler -> Logger.getInstance(DocKit.class).error("值校验错误：" + handler.getData()))
+                .setValidErrorHandler(handler -> LOG.error("值校验错误：" + handler.getData()))
                 .build();
 
         // 生成文档
@@ -46,7 +47,7 @@ public class DocKit {
                     .writeToFile(opts.savePath());
             return true;
         } catch (Exception e) {
-            Logger.getInstance(DocKit.class).error(e);
+            LOG.error(e);
         }
         return false;
     }
