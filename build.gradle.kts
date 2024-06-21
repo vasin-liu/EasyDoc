@@ -59,8 +59,9 @@ tasks {
 
     //兼容版本
     patchPluginXml {
+        //please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/build_number_ranges.html for description
         sinceBuild.set("232")
-        untilBuild.set("242.*")
+        //untilBuild.set("242.*")
     }
 
     //签名

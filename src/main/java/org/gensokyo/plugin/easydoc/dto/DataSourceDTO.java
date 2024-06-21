@@ -5,9 +5,11 @@
  */
 package org.gensokyo.plugin.easydoc.dto;
 
+import com.intellij.database.model.DasDataSource;
 import com.intellij.database.psi.DbDataSource;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,17 +20,36 @@ import java.util.List;
  * @since 2024/6/6 , Version 1.0.0
  */
 @Data
-public class DataSourceDTO {
+public class DataSourceDTO implements Item<DataSourceDTO> {
 
     public DataSourceDTO() {
     }
 
-    public DataSourceDTO(DbDataSource dataSource) {
+    public DataSourceDTO(DbDataSource ds) {
+        this.das = ds;
+        this.name = ds.getName();
+        this.comment = ds.getComment();
+        this.dialect = ds.getDatabaseDialect().getDisplayName();
+        this.version = ds.getDatabaseVersion().version;
     }
+
+    public DataSourceDTO(DasDataSource ds) {
+        this.das = ds;
+        this.name = ds.getName();
+        this.comment = ds.getComment();
+        this.dialect = ds.getDbms().getDisplayName();
+        this.version = ds.getDatabaseVersion().version;
+    }
+
+    private DasDataSource das;
 
     private String name;
 
     private String comment;
 
-    private List<NamespaceDTO> namespaces;
+    private String dialect;
+
+    private String version;
+
+    private List<NamespaceDTO> namespaces = new ArrayList<>();
 }

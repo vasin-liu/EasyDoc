@@ -10,7 +10,7 @@ import com.deepoove.poi.config.Configure;
 import com.deepoove.poi.plugin.table.LoopRowTableRenderPolicy;
 import org.gensokyo.plugin.easydoc.dto.ColumnDTO;
 import org.gensokyo.plugin.easydoc.dto.TableDTO;
-import org.gensokyo.plugin.easydoc.ui.SelectSavePath;
+import org.gensokyo.plugin.easydoc.ui.MainDialog;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -73,7 +73,7 @@ public class EasyDocTests {
             Map<String, Object> map = new HashMap<>() {{
                 put("tables", tables);
             }};
-            InputStream stream = SelectSavePath.class.getResourceAsStream("/default.docx");
+            InputStream stream = MainDialog.class.getResourceAsStream("/default.docx");
             XWPFTemplate.compile(stream, config)
                     .render(map)
                     .writeToFile("E:\\Desktop\\db.docx");

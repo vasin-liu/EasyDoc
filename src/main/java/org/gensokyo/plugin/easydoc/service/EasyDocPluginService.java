@@ -3,7 +3,7 @@
  * Site: http://www.pcitech.com/
  * Address：PCI Intelligent Building, No.2 Xincen Fourth Road, Tianhe District, Guangzhou，China（Zip code：510653）
  */
-package com.sjhy.plugin.service;
+package org.gensokyo.plugin.easydoc.service;
 
 import com.intellij.openapi.Disposable;
 
@@ -14,6 +14,6 @@ import com.intellij.openapi.Disposable;
  * @version 1.0.0
  * @since 2024/6/17 , Version 1.0.0
  */
-public interface EasyCodePluginService extends Disposable {
+public interface EasyDocPluginService extends Disposable {
 
 }

@@ -5,11 +5,13 @@
  */
 package org.gensokyo.plugin.easydoc.dto;
 
+import com.intellij.database.model.DasTable;
 import com.intellij.database.model.DasTableKey;
 import com.intellij.database.psi.DbTable;
 import com.intellij.database.util.DasUtil;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,12 +23,13 @@ import java.util.Objects;
  * @since 2024/6/6 , Version 1.0.0
  */
 @Data
-public class TableDTO {
+public class TableDTO implements Item<TableDTO> {
 
     public TableDTO() {
     }
 
     public TableDTO(DbTable table) {
+        this.das = table;
         this.name = table.getName();
         this.comment = table.getComment();
         this.schema = DasUtil.getSchema(table);
@@ -41,6 +44,8 @@ public class TableDTO {
                 .toList();
     }
 
+    private DasTable das;
+
     private String name;
 
     private String comment;
@@ -49,5 +54,5 @@ public class TableDTO {
 
     private String primaryKey;
 
-    private List<ColumnDTO> columns;
+    private List<ColumnDTO> columns = new ArrayList<>();
 }

@@ -3,14 +3,14 @@
  * Site: http://www.pcitech.com/
  * Address：PCI Intelligent Building, No.2 Xincen Fourth Road, Tianhe District, Guangzhou，China（Zip code：510653）
  */
-package com.sjhy.plugin.service.impl;
+package org.gensokyo.plugin.easydoc.service.impl;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.messages.MessageBusConnection;
-import com.sjhy.plugin.constant.Const;
-import com.sjhy.plugin.service.EasyCodePluginService;
+import org.gensokyo.plugin.easydoc.constant.Const;
+import org.gensokyo.plugin.easydoc.service.EasyDocPluginService;
 
 import java.io.File;
 
@@ -21,13 +21,13 @@ import java.io.File;
  * @version 1.0.0
  * @since 2024/6/17 , Version 1.0.0
  */
-public class EasyCodePluginServiceImpl implements EasyCodePluginService {
+public class EasyDocPluginServiceImpl implements EasyDocPluginService {
 
-    private static final Logger LOG = Logger.getInstance(EasyCodePluginServiceImpl.class);
+    private static final Logger LOG = Logger.getInstance(EasyDocPluginServiceImpl.class);
 
     private final MessageBusConnection connection;
 
-    public EasyCodePluginServiceImpl() {
+    public EasyDocPluginServiceImpl() {
         // 在应用启动时注册清理任务
         connection = ApplicationManager.getApplication().getMessageBus().connect();
         connection.subscribe(com.intellij.ide.AppLifecycleListener.TOPIC, new com.intellij.ide.AppLifecycleListener() {

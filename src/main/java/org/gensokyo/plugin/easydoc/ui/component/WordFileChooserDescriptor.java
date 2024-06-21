@@ -5,10 +5,12 @@
  */
 package org.gensokyo.plugin.easydoc.ui.component;
 
-import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
-import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
+import org.apache.commons.lang3.StringUtils;
+import org.gensokyo.plugin.easydoc.constant.Const;
+
+import java.util.Objects;
 
 /**
  * word文档文件选择器
@@ -17,40 +19,32 @@ import com.intellij.openapi.vfs.VirtualFile;
  * @version 1.0.0
  * @since 2024/6/20 , Version 1.0.0
  */
-public class WordFileChooser {
-    public static void chooseWordFile() {
-        // 创建文件选择描述符，只允许选择 Word 文档 (.doc 和 .docx)
-        FileChooserDescriptor descriptor = new FileChooserDescriptor(true, false, false, false, false, false) {
-            @Override
-            public boolean isFileVisible(VirtualFile file, boolean showHiddenFiles) {
-                if (!file.isDirectory()) {
-                    String extension = file.getExtension();
-                    return extension != null && (extension.equalsIgnoreCase("doc") || extension.equalsIgnoreCase("docx"));
-                }
-                return super.isFileVisible(file, showHiddenFiles);
-            }
+public class WordFileChooserDescriptor extends FileChooserDescriptor{
 
-            @Override
-            public boolean isFileSelectable(VirtualFile file) {
-                if (!file.isDirectory()) {
-                    String extension = file.getExtension();
-                    return extension != null && (extension.equalsIgnoreCase("doc") || extension.equalsIgnoreCase("docx"));
-                }
-                return super.isFileSelectable(file);
-            }
-        };
+    public WordFileChooserDescriptor() {
+        super(true, false, false, false, false, false);
+    }
 
-        descriptor.setTitle("Select Word Document");
-        descriptor.setDescription("Please select a Word document (.doc or .docx)");
-
-        // 打开文件选择器
-        VirtualFile file = FileChooser.chooseFile(descriptor, null, null);
-        if (file != null) {
-            // 处理用户选择的文件
-            String filePath = file.getPath();
-            Messages.showInfoMessage("You selected: " + filePath, "File Selected");
-        } else {
-            Messages.showWarningDialog("No file selected", "Warning");
+    @Override
+    public boolean isFileVisible(VirtualFile file, boolean showHiddenFiles) {
+        if (!file.isDirectory()) {
+            String extension = file.getExtension();
+            return isWordFile(extension);
         }
+        return super.isFileVisible(file, showHiddenFiles);
+    }
+
+    @Override
+    public boolean isFileSelectable(VirtualFile file) {
+        if (Objects.nonNull(file) && !file.isDirectory()) {
+            String extension = file.getExtension();
+            return isWordFile(extension);
+        }
+        return super.isFileSelectable(file);
+    }
+
+    private boolean isWordFile(String extension) {
+        return StringUtils.isNotBlank(extension)
+                && (extension.equalsIgnoreCase(Const.FILE_EXT_DOC) || extension.equalsIgnoreCase(Const.FILE_EXT_DOCX));
     }
 }
