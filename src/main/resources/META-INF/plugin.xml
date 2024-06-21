@@ -1,0 +1,48 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>org.gensokyo.plugin.easydoc</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+    <name>EasyDoc</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor email="liuweixing@pcitech.com" url="https://www.pcitech.com">佳都科技</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+    <description><![CDATA[
+    <tag>EasyDoc,Database To Word,code,doc generate,doc tools</tag>
+      <h3>English:</h3>
+      <ul>
+      <li>The database document generation plug-in based on IntelliJ IDEA is developed to support custom templates (word).</li>
+      </ul>
+      <h3>中文：</h3>
+      <ul>
+      <li>基于IntelliJ IDEA开发的数据库文档生成插件，支持自定义Word模板。</li>
+  ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>com.intellij.database</depends>
+
+    <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceInterface="org.gensokyo.plugin.easydoc.service.CodeGenerateService"
+                        serviceImplementation="org.gensokyo.plugin.easydoc.service.impl.CodeGenerateServiceImpl"/>
+    </extensions>
+
+    <actions>
+        <action id="org.gensokyo.plugin.easydoc.action.generate"
+                text="EasyDoc"
+                class="org.gensokyo.plugin.easydoc.actions.MainAction">
+            <!--生成代码菜单-->
+            <add-to-group group-id="DatabaseViewPopupMenu" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>
