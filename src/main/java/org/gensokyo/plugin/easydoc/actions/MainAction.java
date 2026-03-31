@@ -17,7 +17,10 @@ import org.gensokyo.plugin.easydoc.dto.TableDTO;
 import org.gensokyo.plugin.easydoc.ui.MainDialog;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * 代码生成菜单
@@ -74,6 +77,9 @@ public class MainAction extends AnAction {
     }
 
     private boolean isRightElementSelected(PsiElement[] psiElements) {
+        if (psiElements == null || psiElements.length == 0) {
+            return false;
+        }
         return Arrays.stream(psiElements)
                 .allMatch(psiElement -> psiElement instanceof DbTable || psiElement instanceof DbNamespace);
 
@@ -118,6 +124,6 @@ public class MainAction extends AnAction {
 
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        return ActionUpdateThread.EDT;
+        return ActionUpdateThread.BGT;
     }
 }

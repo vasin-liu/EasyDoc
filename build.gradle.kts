@@ -34,7 +34,7 @@ intellij {
     // 沙箱目录位置，用于保存IDEA的设置，默认在build文件下面，防止clean，放在根目录下。
     sandboxDir.set("${rootProject.rootDir}/idea-sandbox")
 
-    version.set("2023.2.5")
+    version.set("2024.2.4")
 
     type.set("IU") // Target IDE Platform
 
@@ -79,8 +79,8 @@ tasks {
     //调试
     runIde {
         jvmArgs = listOf(
-            "-Xmx512m",
-            "-Xms256m",
+            "-Xmx2g",
+            "-Xms1g",
             "-XX:ReservedCodeCacheSize=512m",
             "-XX:+IgnoreUnrecognizedVMOptions",
             "-XX:+UseG1GC",
@@ -96,7 +96,7 @@ tasks {
             //注册
             "--add-opens=java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED",
             "--add-opens=java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED",
-            "-javaagent:D:\\Software\\JetBrains\\jetbra\\ja-netfilter.jar=jetbrains"
+            "-javaagent:E:\\Software\\JetBrains\\jetbra\\ja-netfilter.jar=jetbrains"
         )
     }
 }
