@@ -72,4 +72,8 @@ public class ColumnDTO implements Item<ColumnDTO> {
     private boolean isComputed;
 
     private String tableName;
+
+    public void prepareForRender() {
+        this.das = null;
+    }
 }

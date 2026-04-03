@@ -65,4 +65,9 @@ public class DataSourceDTO implements Item<DataSourceDTO> {
     private String version;
 
     private List<NamespaceDTO> namespaces = new ArrayList<>();
+
+    public void prepareForRender() {
+        namespaces.forEach(NamespaceDTO::prepareForRender);
+        this.das = null;
+    }
 }

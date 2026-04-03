@@ -14,6 +14,7 @@ import org.gensokyo.plugin.easydoc.constant.Const;
 import org.gensokyo.plugin.easydoc.dto.DataSourceDTO;
 import org.gensokyo.plugin.easydoc.dto.NamespaceDTO;
 import org.gensokyo.plugin.easydoc.dto.TableDTO;
+import org.gensokyo.plugin.easydoc.kit.DbPartitionKit;
 import org.gensokyo.plugin.easydoc.ui.MainDialog;
 import org.jetbrains.annotations.NotNull;
 
@@ -60,8 +61,9 @@ public class MainAction extends AnAction {
 
         for (PsiElement element : psiElements) {
             if (element instanceof DbTable dbTable) {
-                NamespaceDTO ns = toNamespace(dbTable);
-                addOrMerge(cache, dbTable.getDataSource(), ns);
+                DbTable docTable = DbPartitionKit.resolveRootTableForDocumentation(project, dbTable);
+                NamespaceDTO ns = toNamespace(docTable);
+                addOrMerge(cache, docTable.getDataSource(), ns);
             }
 
             if (element instanceof DbNamespace dbNamespace) {

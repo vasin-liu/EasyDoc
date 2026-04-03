@@ -7,6 +7,7 @@ package org.gensokyo.plugin.easydoc.dto;
 
 import com.intellij.database.model.DasTable;
 import com.intellij.database.model.DasTableKey;
+import com.intellij.database.model.ObjectKind;
 import com.intellij.database.psi.DbTable;
 import com.intellij.database.util.DasUtil;
 import lombok.Data;
@@ -14,6 +15,7 @@ import lombok.Data;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * 表数据对象
@@ -33,15 +35,11 @@ public class TableDTO implements Item<TableDTO> {
         this.name = table.getName();
         this.comment = table.getComment();
         this.schema = DasUtil.getSchema(table);
+        this.objectKind = resolveObjectKindName(table.getKind());
         DasTableKey dtk = DasUtil.getPrimaryKey(table);
         if (Objects.nonNull(dtk)) {
             this.primaryKey = dtk.getName();
         }
-        // 处理所有列
-        this.columns = DasUtil.getColumns(table)
-                .toStream()
-                .map(ColumnDTO::new)
-                .toList();
     }
 
     private DasTable das;
@@ -55,4 +53,50 @@ public class TableDTO implements Item<TableDTO> {
     private String primaryKey;
 
     private List<ColumnDTO> columns = new ArrayList<>();
+
+    /**
+     * 数据库对象类型（TABLE/VIEW/MATERIALIZED_VIEW）。
+     */
+    private String objectKind = "TABLE";
+
+    private transient boolean columnsResolved;
+
+    public List<ColumnDTO> getColumns() {
+        if (columnsResolved) {
+            return columns;
+        }
+        if (das instanceof DbTable dbTable) {
+            this.columns = DasUtil.getColumns(dbTable)
+                    .toStream()
+                    .map(ColumnDTO::new)
+                    .collect(Collectors.toCollection(ArrayList::new));
+            // Release DB PSI reference immediately after column extraction to reduce memory pressure
+            this.das = null;
+        } else {
+            this.columns = new ArrayList<>();
+        }
+        this.columnsResolved = true;
+        return columns;
+    }
+
+    public void setColumns(List<ColumnDTO> columns) {
+        this.columns = Objects.isNull(columns) ? new ArrayList<>() : columns;
+        this.columnsResolved = true;
+    }
+
+    public boolean isKind(String kindName) {
+        return Objects.equals(this.objectKind, kindName);
+    }
+
+    private static String resolveObjectKindName(ObjectKind objectKind) {
+        if (Objects.isNull(objectKind)) {
+            return "TABLE";
+        }
+        return String.valueOf(objectKind);
+    }
+
+    public void prepareForRender() {
+        getColumns().forEach(ColumnDTO::prepareForRender);
+        this.das = null;
+    }
 }

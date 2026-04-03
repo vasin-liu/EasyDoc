@@ -36,11 +36,12 @@
                                 <li>das 命名空间原始对象</li>
                                 <li>name 命名空间名称</li>
                                 <li>comment 命名空间注释</li>
-                                <li>tables 数据表集合：
+                                <li>tables 数据表集合（含物理表、视图、物化视图等，具体取决于数据源与 Database 工具支持）：
                                     <ol>
                                         <li>das 数据表原始对象</li>
                                         <li>name 数据表名</li>
                                         <li>comment 数据表注释</li>
+                                        <li>objectKind 对象类型，如 TABLE、VIEW、MATERIALIZED_VIEW</li>
                                         <li>schema 数据库名</li>
                                         <li>primaryKey 主键列名</li>
                                         <li>columns 表列集合：
@@ -68,6 +69,7 @@
                         </li>
                     </ol>
                 </li>
+                <li>生成文档前，若视图或物化视图的列未填写注释，插件会尽量用同一命名空间下物理表中<strong>同名列</strong>的已有注释进行回填，便于文档展示。</li>
                 <li>{{ds4table}} 所有选中的数据库和表的数据源集合（含库和表），</br>
                     同dataSources，方便支持LoopRowTableRenderPolicy</li>
                 <li>{{ns4table}} 命名空间集合（在关系数据库中通常指schema），</br>

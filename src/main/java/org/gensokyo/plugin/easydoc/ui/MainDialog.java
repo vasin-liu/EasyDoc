@@ -107,6 +107,9 @@ public class MainDialog extends DialogWrapper {
         super(project);
         this.project = project;
         this.dataSources = dataSources;
+        // CRITICAL: Release DB PSI/model references BEFORE UI initialization to allow
+        // ModelMemoryManager to compact memory early, especially for 100+ tables/views.
+        dataSources.forEach(DataSourceDTO::prepareForRender);
         this.initEvent();
         this.initUi();
         init();
@@ -266,7 +269,10 @@ public class MainDialog extends DialogWrapper {
 
         fillDatabaseComments();
 
-        List<NamespaceDTO> namespaces = dataSources.stream().flatMap(ds -> ds.getNamespaces().stream()).toList();
+        List<NamespaceDTO> namespaces = dataSources.stream()
+                .flatMap(ds -> ds.getNamespaces().stream())
+                .toList();
+        namespaces.forEach(NamespaceDTO::inheritColumnCommentsForDerivedObjects);
 
         DocOptions opts = DocOptions.of()
                 .template(is)

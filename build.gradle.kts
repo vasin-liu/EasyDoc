@@ -79,11 +79,14 @@ tasks {
     //调试
     runIde {
         jvmArgs = listOf(
-            "-Xmx2g",
-            "-Xms1g",
+            "-Xmx6g",
+            "-Xms2g",
             "-XX:ReservedCodeCacheSize=512m",
             "-XX:+IgnoreUnrecognizedVMOptions",
             "-XX:+UseG1GC",
+            "-XX:G1ReservePercent=15",
+            "-XX:InitiatingHeapOccupancyPercent=40",
+            "-XX:MaxGCPauseMillis=200",
             "-XX:SoftRefLRUPolicyMSPerMB=50",
             "-XX:CICompilerCount=2",
             "-XX:+HeapDumpOnOutOfMemoryError",
@@ -120,4 +123,5 @@ dependencies {
 
     testCompileOnly("org.projectlombok:lombok:1.18.32")
     testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
+    testImplementation("junit:junit:4.13.2")
 }
