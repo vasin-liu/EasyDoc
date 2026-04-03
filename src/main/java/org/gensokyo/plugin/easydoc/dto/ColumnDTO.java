@@ -11,6 +11,9 @@ import com.intellij.database.util.DasUtil;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 
+import java.lang.reflect.Method;
+import java.util.Objects;
+
 /**
  * 列对象
  *
@@ -27,12 +30,12 @@ public class ColumnDTO implements Item<ColumnDTO> {
     public ColumnDTO(DasColumn column) {
         this.das = column;
         this.name = column.getName();
-        this.comment = StringUtils.defaultString(column.getComment(), "");
+        this.comment = resolveColumnComment(column);
         DataType dataType = column.getDasType().toDataType();
         this.type = dataType.typeName;
         this.length = dataType.getLength();
         this.isQuoted = column.isQuoted();
-        this.defaultValue = StringUtils.defaultString(column.getDefault(), "");
+        this.defaultValue = Objects.toString(column.getDefault(), "");
         this.isNotNull = column.isNotNull();
         this.isPrimaryKey = DasUtil.isPrimary(column);
         this.isIndex = DasUtil.isIndexColumn(column);
@@ -41,6 +44,38 @@ public class ColumnDTO implements Item<ColumnDTO> {
         this.isAuto = DasUtil.isAuto(column);
         this.isComputed = DasUtil.isComputed(column);
         this.tableName = column.getTableName();
+    }
+
+    private static String resolveColumnComment(DasColumn column) {
+        String primary = StringUtils.trimToEmpty(Objects.toString(column.getComment(), ""));
+        if (StringUtils.isNotBlank(primary)) {
+            return primary;
+        }
+        return StringUtils.trimToEmpty(firstStringFromReflect(column,
+                "getRemarks", "getRemark", "getDescription", "getCommentText"));
+    }
+
+    private static String firstStringFromReflect(Object target, String... methodNames) {
+        for (String name : methodNames) {
+            try {
+                Method m = target.getClass().getMethod(name);
+                if (m.getParameterCount() != 0) {
+                    continue;
+                }
+                m.trySetAccessible();
+                Object r = m.invoke(target);
+                if (r == null) {
+                    continue;
+                }
+                String s = StringUtils.trimToEmpty(String.valueOf(r));
+                if (StringUtils.isNotBlank(s)) {
+                    return s;
+                }
+            } catch (ReflectiveOperationException | SecurityException ignored) {
+                // try next method name
+            }
+        }
+        return "";
     }
 
     private DasColumn das;

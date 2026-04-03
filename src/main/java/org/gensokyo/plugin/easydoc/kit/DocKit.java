@@ -19,12 +19,19 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Objects;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -53,15 +60,7 @@ public class DocKit {
     }
 
     public static boolean create(DocOptions opts) {
-        Configure config = Configure.builder()
-                .bind("ds4table", new LoopRowTableRenderPolicy())
-                .bind("ns4table", new LoopRowTableRenderPolicy())
-                .bind("columns", new LoopRowTableRenderPolicy())
-                //目录
-                .bind("toc", new TOCRenderPolicy())
-                .useSpringEL()
-                .setValidErrorHandler(handler -> LOG.error("值校验错误：" + handler.getData()))
-                .build();
+        Configure config = buildConfigure();
 
         byte[] templateBytes;
         try (var stream = Objects.requireNonNull(opts.template())) {
@@ -85,7 +84,24 @@ public class DocKit {
 
         // 大数据量兜底：分块渲染，避免 poi-tl/POI 在一次渲染时占用过高堆内存
         LOG.warn("表/视图数量过多（totalTables=" + totalTables + "），改为分块渲染，防止 Java heap space");
-        return renderInParts(templateBytes, config, opts, totalTables, MAX_TABLES_PER_PART);
+        return renderInParts(templateBytes, config, opts);
+    }
+
+    private static Configure buildConfigure() {
+        return Configure.builder()
+                .bind("ds4table", new LoopRowTableRenderPolicy())
+                .bind("ns4table", new LoopRowTableRenderPolicy())
+                .bind("ds4tableTables", new LoopRowTableRenderPolicy())
+                .bind("ns4tableTables", new LoopRowTableRenderPolicy())
+                .bind("ds4tableViews", new LoopRowTableRenderPolicy())
+                .bind("ns4tableViews", new LoopRowTableRenderPolicy())
+                .bind("ds4tableMaterializedViews", new LoopRowTableRenderPolicy())
+                .bind("ns4tableMaterializedViews", new LoopRowTableRenderPolicy())
+                .bind("columns", new LoopRowTableRenderPolicy())
+                .bind("toc", new TOCRenderPolicy())
+                .useSpringEL()
+                .setValidErrorHandler(handler -> LOG.error("值校验错误：" + handler.getData()))
+                .build();
     }
 
     private static boolean renderSingle(byte[] templateBytes, Configure config, DocOptions opts) {
@@ -102,20 +118,28 @@ public class DocKit {
     private static boolean renderInParts(
             byte[] templateBytes,
             Configure config,
-            DocOptions opts,
-            int totalTables,
-            int maxTablesPerPart
+            DocOptions opts
     ) {
+        Path tempDir;
+        try {
+            tempDir = Files.createTempDirectory("easydoc-doc-parts-");
+        } catch (IOException e) {
+            LOG.error("创建分片临时目录失败", e);
+            return false;
+        }
+        try {
+        LOG.info("EasyDoc 分片临时目录: " + tempDir.toAbsolutePath());
+
         // 按 namespace 边界切块：避免同一章节（同一 Namespace）被拆到多个 part 里导致重复章节标题
         List<List<NamespaceDTO>> parts = new ArrayList<>();
         List<NamespaceDTO> currentPart = new ArrayList<>();
         int currentCount = 0;
         for (NamespaceDTO ns : opts.namespaces()) {
             int nsTableCount = ns.getTables() == null ? 0 : ns.getTables().size();
-            if (nsTableCount <= 0) {
+            if (nsTableCount == 0) {
                 continue;
             }
-            if (currentCount > 0 && currentCount + nsTableCount > maxTablesPerPart) {
+            if (currentCount > 0 && currentCount + nsTableCount > 15) {
                 parts.add(currentPart);
                 currentPart = new ArrayList<>();
                 currentCount = 0;
@@ -129,6 +153,7 @@ public class DocKit {
 
         int partIndex = 0;
         List<String> partDocPaths = new ArrayList<>();
+        List<DocOptions> partJobs = new ArrayList<>();
         for (List<NamespaceDTO> partNamespaces : parts) {
             partIndex++;
 
@@ -151,7 +176,11 @@ public class DocKit {
 
             // 构造 part dataSources：保留原 dataSource 的其它字段，只替换 namespaces 子集
             List<DataSourceDTO> partDataSources = new ArrayList<>();
-            for (DataSourceDTO ds : opts.dataSources()) {
+            Collection<DataSourceDTO> optSources = opts.dataSources();
+            if (optSources == null) {
+                continue;
+            }
+            for (DataSourceDTO ds : optSources) {
                 List<NamespaceDTO> partNamespacesForDs = ds.getNamespaces().stream()
                         .filter(partNsByOrigin::containsKey)
                         .map(partNsByOrigin::get)
@@ -167,13 +196,12 @@ public class DocKit {
                 }
             }
 
-            // part 保存路径：xxx_part01.docx
-            String partSavePath = withPartSuffix(opts.savePath(), partIndex);
+            Path partFile = tempDir.resolve(String.format("part_%02d.docx", partIndex));
+            String partSavePath = partFile.toAbsolutePath().toString();
             partDocPaths.add(partSavePath);
 
-            // 生成 part doc
             DocOptions partOpts = DocOptions.of()
-                    .template(null) // 这里不使用 template（renderSingle 使用 templateBytes）
+                    .template(null)
                     .title(opts.title())
                     .author(opts.author())
                     .version(opts.version())
@@ -185,44 +213,75 @@ public class DocKit {
                                     .map(partNsByOrigin::get)
                                     .collect(Collectors.toList())
                     );
+            partJobs.add(partOpts);
+        }
 
-            LOG.warn("开始生成文档 part " + partIndex + "，savePath=" + partSavePath);
-            if (!renderSingle(templateBytes, config, partOpts)) {
-                return false;
+        if (partJobs.isEmpty()) {
+            LOG.error("分片任务为空，无法生成文档");
+            return false;
+        }
+
+        int nThreads = Math.min(partJobs.size(), Math.max(2, Runtime.getRuntime().availableProcessors()));
+        ExecutorService pool = Executors.newFixedThreadPool(nThreads, r -> {
+            Thread t = new Thread(r, "easydoc-doc-part");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            List<Callable<Boolean>> tasks = new ArrayList<>();
+            for (DocOptions partOpts : partJobs) {
+                tasks.add(() -> {
+                    LOG.info("开始生成分片: " + partOpts.savePath());
+                    return renderSingle(templateBytes, config, partOpts);
+                });
+            }
+            List<Future<Boolean>> results = pool.invokeAll(tasks);
+            for (Future<Boolean> f : results) {
+                if (!f.get()) {
+                    return false;
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOG.error("分片渲染被中断", e);
+            return false;
+        } catch (ExecutionException e) {
+            LOG.error("分片渲染失败", e.getCause());
+            return false;
+        } finally {
+            pool.shutdown();
+            try {
+                if (!pool.awaitTermination(60, TimeUnit.MINUTES)) {
+                    pool.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                pool.shutdownNow();
+                Thread.currentThread().interrupt();
             }
         }
 
-        // 合并多个 part 到一个最终文档，并删除临时文件
         String finalSavePath = opts.savePath();
-        boolean merged = mergeDocxParts(finalSavePath, partDocPaths);
-        if (merged) {
-            for (String p : partDocPaths) {
-                // 删除临时分文件，避免用户看到多个产物
-                File f = new File(p);
-                // ignore delete failures
-                //noinspection ResultOfMethodCallIgnored
-                f.delete();
-            }
+        return mergeDocxParts(finalSavePath, partDocPaths);
+        } finally {
+            deleteTempDirQuietly(tempDir);
         }
-        return merged;
     }
 
-    private static String withPartSuffix(String savePath, int partIndex) {
-        if (savePath == null || savePath.isBlank()) {
-            return "part_" + partIndex + ".docx";
+    private static void deleteTempDirQuietly(Path dir) {
+        if (dir == null) {
+            return;
         }
-        String lower = savePath.toLowerCase();
-        String suffix;
-        if (lower.endsWith(".docx")) {
-            suffix = ".docx";
-            savePath = savePath.substring(0, savePath.length() - suffix.length());
-        } else if (lower.endsWith(".doc")) {
-            suffix = ".doc";
-            savePath = savePath.substring(0, savePath.length() - suffix.length());
-        } else {
-            suffix = ".docx";
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    LOG.warn("删除临时文件失败: " + p, e);
+                }
+            });
+        } catch (IOException e) {
+            LOG.warn("清理临时目录失败: " + dir, e);
         }
-        return savePath + String.format("_part%02d%s", partIndex, suffix);
     }
 
     /**
@@ -285,7 +344,7 @@ public class DocKit {
 
         // 先解析第一个 part，作为 merged document 的容器；后续 part 只追加“非重复前缀”的部分
         try (ZipFile baseZip = new ZipFile(partDocPaths.get(0))) {
-            byte[] firstDocXml = readZipEntryBytes(baseZip, "word/document.xml");
+            byte[] firstDocXml = readZipEntryBytes(baseZip);
             baseDoc = factory.newDocumentBuilder().parse(new ByteArrayInputStream(firstDocXml));
             baseBody = findWBody(baseDoc);
         }
@@ -308,7 +367,7 @@ public class DocKit {
         for (int i = 1; i < partDocPaths.size(); i++) {
             boolean last = i == partDocPaths.size() - 1;
             try (ZipFile z = new ZipFile(partDocPaths.get(i))) {
-                byte[] docXml = readZipEntryBytes(z, "word/document.xml");
+                byte[] docXml = readZipEntryBytes(z);
                 Document partDoc = factory.newDocumentBuilder().parse(new ByteArrayInputStream(docXml));
                 Element partBody = findWBody(partDoc);
 
@@ -399,10 +458,10 @@ public class DocKit {
                 || lower.contains("目录");
     }
 
-    private static byte[] readZipEntryBytes(ZipFile zipFile, String entryName) throws Exception {
-        ZipEntry entry = zipFile.getEntry(entryName);
+    private static byte[] readZipEntryBytes(ZipFile zipFile) throws Exception {
+        ZipEntry entry = zipFile.getEntry("word/document.xml");
         if (entry == null) {
-            throw new IllegalStateException("Missing zip entry: " + entryName);
+            throw new IllegalStateException("Missing zip entry: " + "word/document.xml");
         }
         try (InputStream is = zipFile.getInputStream(entry);
              ByteArrayOutputStream bos = new ByteArrayOutputStream()) {

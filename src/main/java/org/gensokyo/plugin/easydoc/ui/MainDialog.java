@@ -25,6 +25,7 @@ import org.gensokyo.plugin.easydoc.dto.DefaultTemplateTypeDTO;
 import org.gensokyo.plugin.easydoc.dto.DocOptions;
 import org.gensokyo.plugin.easydoc.dto.NamespaceDTO;
 import org.gensokyo.plugin.easydoc.factory.AbstractCellEditorFactory;
+import org.gensokyo.plugin.easydoc.kit.DerivedCommentInheritanceKit;
 import org.gensokyo.plugin.easydoc.kit.DocKit;
 import org.gensokyo.plugin.easydoc.kit.ProjectKit;
 import org.gensokyo.plugin.easydoc.kit.TableKit;
@@ -272,7 +273,8 @@ public class MainDialog extends DialogWrapper {
         List<NamespaceDTO> namespaces = dataSources.stream()
                 .flatMap(ds -> ds.getNamespaces().stream())
                 .toList();
-        namespaces.forEach(NamespaceDTO::inheritColumnCommentsForDerivedObjects);
+        // 列注释：跨 schema 从同一数据源内所有物理表按列名（忽略大小写）回填到视图/物化视图
+        DerivedCommentInheritanceKit.applyToDataSources(dataSources);
 
         DocOptions opts = DocOptions.of()
                 .template(is)

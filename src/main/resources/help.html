@@ -74,6 +74,14 @@
                     同dataSources，方便支持LoopRowTableRenderPolicy</li>
                 <li>{{ns4table}} 命名空间集合（在关系数据库中通常指schema），</br>
                     同namespaces，方便支持LoopRowTableRenderPolicy</li>
+                <li><b>分章节变量</b>（仅包含对应 objectKind 的对象，可与全量变量二选一或组合使用）：
+                    <ol>
+                        <li>{{dataSourcesTables}} / {{namespacesTables}} / {{ds4tableTables}} / {{ns4tableTables}} — 仅物理表 TABLE</li>
+                        <li>{{dataSourcesViews}} / {{namespacesViews}} / {{ds4tableViews}} / {{ns4tableViews}} — 仅视图 VIEW</li>
+                        <li>{{dataSourcesMaterializedViews}} / {{namespacesMaterializedViews}} / {{ds4tableMaterializedViews}} / {{ns4tableMaterializedViews}} — 仅物化视图 MATERIALIZED_VIEW</li>
+                    </ol>
+                </li>
+                <li>数据量较大时，插件会在系统临时目录下创建子目录生成分片 docx，并<strong>并发渲染</strong>分片后再合并为一份最终文档；临时目录会自动清理。</li>
             </ol>
         </li>
     </ol>

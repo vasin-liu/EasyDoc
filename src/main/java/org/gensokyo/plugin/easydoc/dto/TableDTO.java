@@ -35,7 +35,8 @@ public class TableDTO implements Item<TableDTO> {
         this.name = table.getName();
         this.comment = table.getComment();
         this.schema = DasUtil.getSchema(table);
-        this.objectKind = resolveObjectKindName(table.getKind());
+        ObjectKind kind = table.getKind();
+        this.objectKind = Objects.nonNull(kind) ? kind : ObjectKind.TABLE;
         DasTableKey dtk = DasUtil.getPrimaryKey(table);
         if (Objects.nonNull(dtk)) {
             this.primaryKey = dtk.getName();
@@ -55,9 +56,9 @@ public class TableDTO implements Item<TableDTO> {
     private List<ColumnDTO> columns = new ArrayList<>();
 
     /**
-     * 数据库对象类型（TABLE/VIEW/MATERIALIZED_VIEW）。
+     * 与 IDEA Database 元数据一致的对象类型（TABLE / VIEW / MATERIALIZED_VIEW 等）。
      */
-    private String objectKind = "TABLE";
+    private ObjectKind objectKind = ObjectKind.TABLE;
 
     private transient boolean columnsResolved;
 
@@ -84,15 +85,21 @@ public class TableDTO implements Item<TableDTO> {
         this.columnsResolved = true;
     }
 
-    public boolean isKind(String kindName) {
-        return Objects.equals(this.objectKind, kindName);
+    public boolean isKind(ObjectKind kind) {
+        if (kind == null || this.objectKind == null) {
+            return false;
+        }
+        return this.objectKind == kind;
     }
 
-    private static String resolveObjectKindName(ObjectKind objectKind) {
-        if (Objects.isNull(objectKind)) {
-            return "TABLE";
+    /**
+     * 按枚举常量名比较（不区分大小写），兼容模板/调用方字符串。
+     */
+    public boolean isKind(String kindName) {
+        if (kindName == null || this.objectKind == null) {
+            return false;
         }
-        return String.valueOf(objectKind);
+        return kindName.equalsIgnoreCase(this.objectKind.name());
     }
 
     public void prepareForRender() {
