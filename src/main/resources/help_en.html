@@ -1,0 +1,83 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Template Guide</title>
+</head>
+<body>
+<div>
+    This plugin renders documents with <b>poi-tl (poi template language)</b>. Current version: <b>1.12.2</b>.
+</div>
+<div style="padding-top: 10px">
+    See template syntax details at: <a href="https://deepoove.com/poi-tl/">poi-tl documentation</a>
+</div>
+<div>
+    <ol>
+        <li>Available base variables:
+            <ol>
+                <li>{{title}} document title</li>
+                <li>{{author}} author</li>
+                <li>{{date}} current date</li>
+                <li>{{version}} version</li>
+                <li>{{toc}} table of contents placeholder</li>
+            </ol>
+        </li>
+        <li>Available collection variables:
+            <ol>
+                <li>{{dataSources}} selected data sources (databases and objects):
+                    <ol>
+                        <li>das raw datasource object</li>
+                        <li>name datasource name</li>
+                        <li>comment datasource comment</li>
+                        <li>dialect datasource dialect</li>
+                        <li>version datasource version</li>
+                        <li>namespaces namespace list (usually schema):
+                            <ol>
+                                <li>das raw namespace object</li>
+                                <li>name namespace name</li>
+                                <li>comment namespace comment</li>
+                                <li>tables object list (tables/views/materialized views):
+                                    <ol>
+                                        <li>das raw object</li>
+                                        <li>name object name</li>
+                                        <li>comment object comment</li>
+                                        <li>objectKind type (TABLE/VIEW/MATERIALIZED_VIEW)</li>
+                                        <li>schema schema name</li>
+                                        <li>primaryKey primary key</li>
+                                        <li>columns column list (name/comment/type/defaultValue/isPrimaryKey, etc.)</li>
+                                    </ol>
+                                </li>
+                            </ol>
+                        </li>
+                    </ol>
+                </li>
+                <li>For views/materialized views with missing column comments, comments are backfilled from same-name table columns when possible.</li>
+                <li>{{ds4table}} is equivalent to {{dataSources}} (for LoopRowTableRenderPolicy).</li>
+                <li>{{ns4table}} is equivalent to namespaces (for LoopRowTableRenderPolicy).</li>
+                <li>Object-kind section variables:
+                    <ol>
+                        <li>Tables: {{dataSourcesTables}} / {{namespacesTables}} / {{ds4tableTables}} / {{ns4tableTables}}</li>
+                        <li>Views: {{dataSourcesViews}} / {{namespacesViews}} / {{ds4tableViews}} / {{ns4tableViews}}</li>
+                        <li>Materialized Views: {{dataSourcesMaterializedViews}} / {{namespacesMaterializedViews}} / {{ds4tableMaterializedViews}} / {{ns4tableMaterializedViews}}</li>
+                    </ol>
+                </li>
+                <li>For large datasets, the plugin renders docx parts in parallel, merges them, and cleans temporary files automatically.</li>
+            </ol>
+        </li>
+        <li>Sort feature (optional):
+            <ol>
+                <li>Click <b>Sort Config</b> in the bottom-left area of the main dialog to expand the left panel.</li>
+                <li>Sort source options:
+                    <ol>
+                        <li><b>Disable Sort</b>: keep original order (default).</li>
+                        <li><b>Multi-line Input</b>: one table name per line; empty lines and <code>#</code> comments are supported.</li>
+                        <li><b>TXT File</b>: load a UTF-8 text file with one table name per line.</li>
+                    </ol>
+                </li>
+                <li>Rule: matched tables are ordered by your list; unmatched tables are appended after them.</li>
+                <li>Sorting is case-insensitive; duplicate table names are deduplicated (first occurrence wins).</li>
+            </ol>
+        </li>
+    </ol>
+</div>
+</body>
+</html>
