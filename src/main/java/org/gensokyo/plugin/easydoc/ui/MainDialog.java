@@ -19,14 +19,15 @@ import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.gensokyo.plugin.easydoc.constant.Const;
 import org.gensokyo.plugin.easydoc.dto.DataSourceDTO;
 import org.gensokyo.plugin.easydoc.dto.DefaultTemplateTypeDTO;
 import org.gensokyo.plugin.easydoc.dto.DocOptions;
 import org.gensokyo.plugin.easydoc.dto.NamespaceDTO;
+import org.gensokyo.plugin.easydoc.dto.TableDTO;
 import org.gensokyo.plugin.easydoc.factory.AbstractCellEditorFactory;
 import org.gensokyo.plugin.easydoc.kit.DerivedCommentInheritanceKit;
 import org.gensokyo.plugin.easydoc.kit.DocKit;
+import org.gensokyo.plugin.easydoc.kit.I18nKit;
 import org.gensokyo.plugin.easydoc.kit.ProjectKit;
 import org.gensokyo.plugin.easydoc.kit.TableKit;
 import org.gensokyo.plugin.easydoc.ui.component.CommonTableModel;
@@ -35,16 +36,27 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.Action;
 import javax.swing.table.TableCellEditor;
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * 选择保存路径
@@ -82,6 +94,15 @@ public class MainDialog extends DialogWrapper {
     private JTextField docAuthorTf;
     private JPanel databasePanel;
     private JButton helpBtn;
+    private JLabel languageLabel;
+    private JComboBox<String> languageCb;
+    private JLabel templateTypeLabel;
+    private JLabel templateFileLabel;
+    private JLabel databaseLabel;
+    private JLabel docNameLabel;
+    private JLabel authorLabel;
+    private JLabel versionLabel;
+    private JLabel savePathLabel;
     private JBTable table;
     /**
      * 默认模板下拉框
@@ -94,11 +115,46 @@ public class MainDialog extends DialogWrapper {
     private final Project project;
 
     private final Collection<DataSourceDTO> dataSources;
+    private JSplitPane splitPane;
+    private JPanel tableOrderPanel;
+    private JRadioButton orderDisabledRb;
+    private JRadioButton orderFromInputRb;
+    private JRadioButton orderFromFileRb;
+    private JTextArea orderInputTa;
+    private JTextField orderFileTf;
+    private JPanel orderModePanel;
+    private JScrollPane orderInputScrollPane;
+    private JPanel orderFilePanel;
+    private JButton orderFileChooseBtn;
+    private boolean orderPanelExpanded;
+    private static final int ORDER_PANEL_BASE_WIDTH = 360;
+    private static final int COLLAPSED_DIALOG_WIDTH = 780;
+    private static final int DIALOG_HEIGHT = 500;
+    private int collapsedDialogWidth = -1;
+    private Action sortToggleAction;
+    private Timer panelAnimationTimer;
+    private boolean languageUpdating;
 
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-        return this.contentPane;
+        if (splitPane == null) {
+            splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+            splitPane.setBorder(BorderFactory.createEmptyBorder());
+            splitPane.setResizeWeight(0);
+            splitPane.setContinuousLayout(true);
+            splitPane.setLeftComponent(buildOrderConfigPanel());
+            splitPane.setRightComponent(this.contentPane);
+            splitPane.setDividerSize(0);
+            splitPane.setDividerLocation(0);
+            orderPanelExpanded = false;
+        }
+        return splitPane;
+    }
+
+    @Override
+    public @Nullable Dimension getInitialSize() {
+        return new Dimension(JBUI.scale(COLLAPSED_DIALOG_WIDTH), JBUI.scale(DIALOG_HEIGHT));
     }
 
     /**
@@ -106,6 +162,7 @@ public class MainDialog extends DialogWrapper {
      */
     public MainDialog(Project project, Collection<DataSourceDTO> dataSources) {
         super(project);
+        I18nKit.setLocale(Locale.SIMPLIFIED_CHINESE);
         this.project = project;
         this.dataSources = dataSources;
         // CRITICAL: Release DB PSI/model references BEFORE UI initialization to allow
@@ -114,13 +171,24 @@ public class MainDialog extends DialogWrapper {
         this.initEvent();
         this.initUi();
         init();
-        setTitle(Const.TITLE);
+        applyTexts();
+        setTitle(I18nKit.t("app.title"));
     }
 
     private void initUi() {
+        initLanguageSelector();
         createHelpButton();
         showDefaultTemplatePanel();
         showDatabasePanel();
+    }
+
+    private void initLanguageSelector() {
+        languageUpdating = true;
+        languageCb.removeAllItems();
+        languageCb.addItem(I18nKit.t("lang.zh"));
+        languageCb.addItem(I18nKit.t("lang.en"));
+        languageCb.setSelectedIndex(0);
+        languageUpdating = false;
     }
 
     private void createHelpButton() {
@@ -129,7 +197,7 @@ public class MainDialog extends DialogWrapper {
         Icon scaledIcon = IconUtil.scale(icon, null, 0.8f);
         helpBtn.setIcon(scaledIcon);
         helpBtn.setHorizontalAlignment(SwingConstants.RIGHT);
-        helpBtn.setToolTipText("点击查看模板说明");
+        helpBtn.setToolTipText(I18nKit.t("tooltip.help"));
         helpBtn.setPreferredSize(new Dimension(scaledIcon.getIconWidth(), scaledIcon.getIconHeight()));
         helpBtn.setBorderPainted(false);
         helpBtn.setContentAreaFilled(false);
@@ -137,7 +205,7 @@ public class MainDialog extends DialogWrapper {
 
     private void showDefaultTemplatePanel() {
         templatePanel.removeAll();
-        defaultTemplateCb = new ComboBox<>(Const.DEFAULT_TEMPLATE_TYPES);
+        defaultTemplateCb = new ComboBox<>(defaultTemplates());
         defaultTemplateCb.setRenderer((list, value, index, isSelected, cellHasFocus) -> {
                     JLabel label = new JLabel();
                     if (value != null) {
@@ -160,6 +228,15 @@ public class MainDialog extends DialogWrapper {
         this.contentPane.updateUI();
     }
 
+    private DefaultTemplateTypeDTO[] defaultTemplates() {
+        return new DefaultTemplateTypeDTO[]{
+                DefaultTemplateTypeDTO.of()
+                        .name(I18nKit.t("template.default.name"))
+                        .path("/default_v1.0.0.docx")
+                        .build()
+        };
+    }
+
     private void showCustomTemplatePanel() {
         templatePanel.removeAll();
         fromTextField = new JTextField();
@@ -177,7 +254,7 @@ public class MainDialog extends DialogWrapper {
     }
 
     private @NotNull JButton getButton() {
-        JButton button = new JButton("选择");
+        JButton button = new JButton(I18nKit.t("button.choose"));
         //选择路径
         button.addActionListener(e -> {
             //将当前选中的model设置为基础路径
@@ -191,14 +268,15 @@ public class MainDialog extends DialogWrapper {
     }
 
     private void showDatabasePanel() {
+        databasePanel.removeAll();
         // 第一列，数据库名称
         TableCellEditor nameValueEditor = AbstractCellEditorFactory.createTextFieldEditor(false);
         CommonTableModel.Column<NamespaceDTO> nameValueColumn =
-                new CommonTableModel.Column<>("数据库名", NamespaceDTO::getName, NamespaceDTO::setName, nameValueEditor, null);
+                new CommonTableModel.Column<>(I18nKit.t("table.db.name"), NamespaceDTO::getName, NamespaceDTO::setName, nameValueEditor, null);
         // 第二列，数据库描述
         TableCellEditor commentValueEditor = AbstractCellEditorFactory.createTextFieldEditor(true);
         CommonTableModel.Column<NamespaceDTO> commentValueColumn =
-                new CommonTableModel.Column<>("数据库描述", NamespaceDTO::getComment, NamespaceDTO::setComment, commentValueEditor, null);
+                new CommonTableModel.Column<>(I18nKit.t("table.db.comment"), NamespaceDTO::getComment, NamespaceDTO::setComment, commentValueEditor, null);
 
         List<CommonTableModel.Column<NamespaceDTO>> columns = Arrays.asList(nameValueColumn, commentValueColumn);
         CommonTableModel<NamespaceDTO> tableModel = new CommonTableModel<>(columns,
@@ -207,6 +285,7 @@ public class MainDialog extends DialogWrapper {
         this.databasePanel.add(tableModel.createPanel(), new GridConstraints(0, 0, 1, 1,
                 GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW,
                 GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        this.databasePanel.updateUI();
     }
 
     private void initEvent() {
@@ -225,38 +304,91 @@ public class MainDialog extends DialogWrapper {
         });
         //模板帮助说明
         helpBtn.addActionListener(e -> new HelpDialog().show());
+        languageCb.addActionListener(e -> switchLanguage());
     }
+    @Override
+    protected Action[] createLeftSideActions() {
+        sortToggleAction = new AbstractAction(I18nKit.t("button.sort.config")) {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                toggleOrderPanel();
+            }
+        };
+        return new Action[]{sortToggleAction};
+    }
+
+    private void switchLanguage() {
+        if (languageUpdating) {
+            return;
+        }
+        Locale locale = languageCb.getSelectedIndex() == 1 ? Locale.ENGLISH : Locale.SIMPLIFIED_CHINESE;
+        I18nKit.setLocale(locale);
+        applyTexts();
+        showDatabasePanel();
+        if (defaultTemplateRb.isSelected()) {
+            showDefaultTemplatePanel();
+        } else {
+            showCustomTemplatePanel();
+        }
+    }
+
+    private void applyTexts() {
+        setTitle(I18nKit.t("app.title"));
+        setOKButtonText(I18nKit.t("button.ok"));
+        setCancelButtonText(I18nKit.t("button.cancel"));
+        languageLabel.setText(I18nKit.t("lang.label"));
+        templateTypeLabel.setText(I18nKit.t("label.template.type"));
+        templateFileLabel.setText(I18nKit.t("label.template.file"));
+        databaseLabel.setText(I18nKit.t("label.database"));
+        docNameLabel.setText(I18nKit.t("label.doc.name"));
+        authorLabel.setText(I18nKit.t("label.author"));
+        versionLabel.setText(I18nKit.t("label.version"));
+        savePathLabel.setText(I18nKit.t("label.save.path"));
+        defaultTemplateRb.setText(I18nKit.t("radio.default"));
+        customTemplateRb.setText(I18nKit.t("radio.custom"));
+        pathChooseButton.setText(I18nKit.t("button.choose"));
+        helpBtn.setToolTipText(I18nKit.t("tooltip.help"));
+        languageUpdating = true;
+        languageCb.removeAllItems();
+        languageCb.addItem(I18nKit.t("lang.zh"));
+        languageCb.addItem(I18nKit.t("lang.en"));
+        languageCb.setSelectedIndex(Locale.ENGLISH.equals(I18nKit.getLocale()) ? 1 : 0);
+        languageUpdating = false;
+        refreshSortPanelTexts();
+        refreshSortActionText();
+    }
+
 
     @Override
     protected void doOKAction() {
         String savePath = savePathTf.getText();
         if (StringUtils.isEmpty(savePath)) {
-            Messages.showWarningDialog("请选择生成文档保存路径！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.save.path"), I18nKit.t("app.title"));
             return;
         }
 
         if (CollectionUtils.isEmpty(dataSources)) {
-            Messages.showWarningDialog("请至少选择一个数据库！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.db.empty"), I18nKit.t("app.title"));
             return;
         }
 
         String docTitle = docTitleTf.getText();
         if (StringUtils.isEmpty(docTitle)) {
-            Messages.showWarningDialog("请输入文档标题！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.title.empty"), I18nKit.t("app.title"));
             docTitleTf.requestFocus();
             return;
         }
 
         String docAuthor = docAuthorTf.getText();
         if (StringUtils.isEmpty(docAuthor)) {
-            Messages.showWarningDialog("请输入文档作者！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.author.empty"), I18nKit.t("app.title"));
             docAuthorTf.requestFocus();
             return;
         }
 
         String docVersion = docVersionTf.getText();
         if (StringUtils.isEmpty(docVersion)) {
-            Messages.showWarningDialog("请输入文档版本！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.version.empty"), I18nKit.t("app.title"));
             docVersionTf.requestFocus();
             return;
         }
@@ -275,6 +407,9 @@ public class MainDialog extends DialogWrapper {
                 .toList();
         // 列注释：跨 schema 从同一数据源内所有物理表按列名（忽略大小写）回填到视图/物化视图
         DerivedCommentInheritanceKit.applyToDataSources(dataSources);
+        if (!applyTableOrderFromPanel()) {
+            return;
+        }
 
         DocOptions opts = DocOptions.of()
                 .template(is)
@@ -286,17 +421,17 @@ public class MainDialog extends DialogWrapper {
                 .namespaces(namespaces);
 
         if (createDoc(opts)) {
-            Messages.showInfoMessage("数据库文档生成成功", Const.TITLE);
+            Messages.showInfoMessage(I18nKit.t("dialog.success"), I18nKit.t("app.title"));
             close(OK_EXIT_CODE);
         } else {
-            Messages.showWarningDialog("无法生成数据库文档", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.failed"), I18nKit.t("app.title"));
         }
     }
 
     private boolean createDoc(DocOptions opts) {
         setOKActionEnabled(false);
         final AtomicBoolean success = new AtomicBoolean(false);
-        ProgressManager.getInstance().run(new Task.Modal(project, "生成文档中...", true) {
+        ProgressManager.getInstance().run(new Task.Modal(project, I18nKit.t("dialog.progress"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
@@ -319,6 +454,287 @@ public class MainDialog extends DialogWrapper {
             }
         });
         return success.get();
+    }
+
+    private boolean applyTableOrderFromPanel() {
+        if (orderDisabledRb == null || orderDisabledRb.isSelected()) {
+            return true;
+        }
+
+        List<String> orderedTableNames;
+        if (orderFromInputRb.isSelected()) {
+            orderedTableNames = readTableOrderFromInput();
+        } else if (orderFromFileRb.isSelected()) {
+            orderedTableNames = readTableOrderFromTxt();
+        } else {
+            return true;
+        }
+
+        if (orderedTableNames == null) {
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.order.invalid"), I18nKit.t("app.title"));
+            return false;
+        }
+        if (orderedTableNames.isEmpty()) {
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.order.empty"), I18nKit.t("app.title"));
+            return false;
+        }
+        applyTableOrder(orderedTableNames);
+        return true;
+    }
+
+    private List<String> readTableOrderFromInput() {
+        return parseTableOrderLines(splitLines(orderInputTa == null ? "" : orderInputTa.getText()));
+    }
+
+    private List<String> splitLines(String value) {
+        return Arrays.asList(value.split("\\R"));
+    }
+
+    private List<String> readTableOrderFromTxt() {
+        if (StringUtils.isBlank(orderFileTf == null ? null : orderFileTf.getText())) {
+            return null;
+        }
+        try {
+            List<String> lines = Files.readAllLines(Paths.get(orderFileTf.getText().trim()), StandardCharsets.UTF_8);
+            return parseTableOrderLines(lines);
+        } catch (Exception e) {
+            LOG.error("读取表顺序文件失败: " + orderFileTf.getText(), e);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.order.file"), I18nKit.t("app.title"));
+            return null;
+        }
+    }
+
+    private JPanel buildOrderConfigPanel() {
+        tableOrderPanel = new JPanel(new BorderLayout(0, 8));
+        tableOrderPanel.setBorder(JBUI.Borders.empty(8));
+
+        orderModePanel = new JPanel(new GridLayout(3, 1, 0, 4));
+        orderModePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.source")));
+        orderDisabledRb = new JRadioButton(I18nKit.t("sort.disabled"), true);
+        orderFromInputRb = new JRadioButton(I18nKit.t("sort.input"));
+        orderFromFileRb = new JRadioButton(I18nKit.t("sort.file"));
+        ButtonGroup sourceGroup = new ButtonGroup();
+        sourceGroup.add(orderDisabledRb);
+        sourceGroup.add(orderFromInputRb);
+        sourceGroup.add(orderFromFileRb);
+        orderModePanel.add(orderDisabledRb);
+        orderModePanel.add(orderFromInputRb);
+        orderModePanel.add(orderFromFileRb);
+
+        orderInputTa = new JTextArea(10, 20);
+        orderInputTa.setLineWrap(true);
+        orderInputTa.setWrapStyleWord(true);
+        orderInputScrollPane = new JScrollPane(orderInputTa);
+        orderInputScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.input.title")));
+
+        orderFilePanel = new JPanel(new BorderLayout(6, 0));
+        orderFilePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.file.title")));
+        orderFileTf = new JTextField();
+        orderFileChooseBtn = new JButton(I18nKit.t("button.choose"));
+        orderFileChooseBtn.addActionListener(e -> chooseOrderFile());
+        orderFilePanel.add(orderFileTf, BorderLayout.CENTER);
+        orderFilePanel.add(orderFileChooseBtn, BorderLayout.EAST);
+
+        JPanel body = new JPanel(new BorderLayout(0, 8));
+        body.add(orderModePanel, BorderLayout.NORTH);
+        body.add(orderInputScrollPane, BorderLayout.CENTER);
+        body.add(orderFilePanel, BorderLayout.SOUTH);
+        tableOrderPanel.add(body, BorderLayout.CENTER);
+        refreshOrderInputsEnabled();
+
+        orderDisabledRb.addActionListener(e -> refreshOrderInputsEnabled());
+        orderFromInputRb.addActionListener(e -> refreshOrderInputsEnabled());
+        orderFromFileRb.addActionListener(e -> refreshOrderInputsEnabled());
+        return tableOrderPanel;
+    }
+
+    private void chooseOrderFile() {
+        VirtualFile base = ProjectKit.getBaseDir(project);
+        VirtualFile file = FileChooser.chooseFile(
+                FileChooserDescriptorFactory.createSingleFileDescriptor("txt"),
+                project,
+                base
+        );
+        if (file != null) {
+            orderFileTf.setText(file.getPath());
+        }
+    }
+
+    private void refreshOrderInputsEnabled() {
+        boolean enableInput = orderFromInputRb != null && orderFromInputRb.isSelected();
+        boolean enableFile = orderFromFileRb != null && orderFromFileRb.isSelected();
+        if (orderInputTa != null) {
+            orderInputTa.setEnabled(enableInput);
+        }
+        if (orderFileTf != null) {
+            orderFileTf.setEnabled(enableFile);
+        }
+    }
+
+    private void toggleOrderPanel() {
+        if (orderPanelExpanded) {
+            animateOrderPanel(false);
+        } else {
+            animateOrderPanel(true);
+        }
+    }
+
+    private void animateOrderPanel(boolean expand) {
+        if (splitPane == null) {
+            return;
+        }
+        if (panelAnimationTimer != null && panelAnimationTimer.isRunning()) {
+            panelAnimationTimer.stop();
+        }
+        int targetPanelWidth = calculateOrderPanelWidth();
+        Window window = SwingUtilities.getWindowAncestor(splitPane);
+        if (window == null) {
+            return;
+        }
+        if (collapsedDialogWidth <= 0) {
+            collapsedDialogWidth = JBUI.scale(COLLAPSED_DIALOG_WIDTH);
+        }
+        int startDivider = splitPane.getDividerLocation();
+        int endWidth = expand ? (collapsedDialogWidth + targetPanelWidth) : collapsedDialogWidth;
+        int endDivider = expand ? targetPanelWidth : 0;
+        splitPane.setDividerSize(8);
+
+        // Avoid per-frame window resize jitter: resize once, animate divider only.
+        if (expand && window.getWidth() != endWidth) {
+            window.setSize(endWidth, window.getHeight());
+            window.validate();
+        }
+
+        int steps = 8;
+        final int[] current = {0};
+        panelAnimationTimer = new Timer(12, e -> {
+            current[0]++;
+            double progress = Math.min(1.0d, current[0] / (double) steps);
+            int nextDivider = (int) Math.round(startDivider + (endDivider - startDivider) * progress);
+            splitPane.setDividerLocation(nextDivider);
+            if (progress >= 1.0d) {
+                panelAnimationTimer.stop();
+                orderPanelExpanded = expand;
+                if (!expand) {
+                    splitPane.setDividerSize(0);
+                    splitPane.setDividerLocation(0);
+                    if (window.getWidth() != endWidth) {
+                        window.setSize(endWidth, window.getHeight());
+                        window.validate();
+                    }
+                }
+                refreshSortActionText();
+            }
+        });
+        panelAnimationTimer.start();
+    }
+
+    private void refreshSortPanelTexts() {
+        if (orderModePanel != null) {
+            orderModePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.source")));
+        }
+        if (orderDisabledRb != null) {
+            orderDisabledRb.setText(I18nKit.t("sort.disabled"));
+        }
+        if (orderFromInputRb != null) {
+            orderFromInputRb.setText(I18nKit.t("sort.input"));
+        }
+        if (orderFromFileRb != null) {
+            orderFromFileRb.setText(I18nKit.t("sort.file"));
+        }
+        if (orderInputScrollPane != null) {
+            orderInputScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.input.title")));
+        }
+        if (orderFilePanel != null) {
+            orderFilePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.file.title")));
+        }
+        if (orderFileChooseBtn != null) {
+            orderFileChooseBtn.setText(I18nKit.t("button.choose"));
+        }
+    }
+
+    private void refreshSortActionText() {
+        if (sortToggleAction != null) {
+            sortToggleAction.putValue(Action.NAME, orderPanelExpanded ? I18nKit.t("button.sort.collapse") : I18nKit.t("button.sort.config"));
+        }
+    }
+
+    private int calculateOrderPanelWidth() {
+        int dpiScaledBase = JBUI.scale(ORDER_PANEL_BASE_WIDTH);
+        int contentMinimumWidth = tableOrderPanel == null ? dpiScaledBase : tableOrderPanel.getMinimumSize().width;
+        return Math.max(dpiScaledBase, contentMinimumWidth);
+    }
+
+    private List<String> parseTableOrderLines(List<String> lines) {
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        for (String line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String tableName = line.trim();
+            if (tableName.isEmpty() || tableName.startsWith("#")) {
+                continue;
+            }
+            names.add(tableName);
+        }
+        return new ArrayList<>(names);
+    }
+
+    private void applyTableOrder(List<String> orderedTableNames) {
+        Map<String, Integer> orderIndex = new HashMap<>();
+        for (int i = 0; i < orderedTableNames.size(); i++) {
+            orderIndex.putIfAbsent(orderedTableNames.get(i).toLowerCase(Locale.ROOT), i);
+        }
+        for (DataSourceDTO ds : dataSources) {
+            if (CollectionUtils.isEmpty(ds.getNamespaces())) {
+                continue;
+            }
+            List<NamespaceDTO> namespaces = ds.getNamespaces();
+            sortTablesInNamespaces(namespaces, orderIndex);
+            List<NamespaceDTO> sortedNamespaces = namespaces.stream()
+                    .sorted((a, b) -> compareNamespace(a, b, orderIndex))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            ds.setNamespaces(sortedNamespaces);
+        }
+    }
+
+    private void sortTablesInNamespaces(List<NamespaceDTO> namespaces, Map<String, Integer> orderIndex) {
+        for (NamespaceDTO ns : namespaces) {
+            if (CollectionUtils.isEmpty(ns.getTables())) {
+                continue;
+            }
+            List<TableDTO> sorted = ns.getTables().stream()
+                    .sorted(Comparator.comparingInt(t -> tableOrder(t.getName(), orderIndex)))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            ns.setTables(sorted);
+        }
+    }
+
+    private int compareNamespace(NamespaceDTO left, NamespaceDTO right, Map<String, Integer> orderIndex) {
+        int leftOrder = namespaceOrder(left, orderIndex);
+        int rightOrder = namespaceOrder(right, orderIndex);
+        if (leftOrder != rightOrder) {
+            return Integer.compare(leftOrder, rightOrder);
+        }
+        return StringUtils.defaultString(left.getName()).compareToIgnoreCase(StringUtils.defaultString(right.getName()));
+    }
+
+    private int namespaceOrder(NamespaceDTO namespace, Map<String, Integer> orderIndex) {
+        if (namespace == null || CollectionUtils.isEmpty(namespace.getTables())) {
+            return Integer.MAX_VALUE;
+        }
+        int min = Integer.MAX_VALUE;
+        for (TableDTO table : namespace.getTables()) {
+            min = Math.min(min, tableOrder(table.getName(), orderIndex));
+        }
+        return min;
+    }
+
+    private int tableOrder(String tableName, Map<String, Integer> orderIndex) {
+        if (StringUtils.isBlank(tableName) || orderIndex.isEmpty()) {
+            return Integer.MAX_VALUE;
+        }
+        return orderIndex.getOrDefault(tableName.toLowerCase(Locale.ROOT), Integer.MAX_VALUE);
     }
 
     private void fillDatabaseComments() {
@@ -344,7 +760,7 @@ public class MainDialog extends DialogWrapper {
             }
         } catch (Exception e) {
             LOG.error("获取模板文件错误，请检查模板文件是否存在或者路径是否正确！", e);
-            Messages.showWarningDialog("获取模板文件错误，请检查模板文件是否存在或者路径是否正确！", Const.TITLE);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.template"), I18nKit.t("app.title"));
         }
         return null;
     }
