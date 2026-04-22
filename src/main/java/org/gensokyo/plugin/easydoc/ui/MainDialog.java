@@ -12,6 +12,7 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.components.JBList;
 import com.intellij.ui.table.JBTable;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
@@ -31,12 +32,14 @@ import org.gensokyo.plugin.easydoc.kit.I18nKit;
 import org.gensokyo.plugin.easydoc.kit.ProjectKit;
 import org.gensokyo.plugin.easydoc.kit.TableKit;
 import org.gensokyo.plugin.easydoc.ui.component.CommonTableModel;
+import org.gensokyo.plugin.easydoc.ui.component.JListReorderUtil;
 import org.gensokyo.plugin.easydoc.ui.component.WordFileChooserDescriptor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.Action;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.table.TableCellEditor;
 import java.awt.*;
 import java.io.File;
@@ -120,12 +123,17 @@ public class MainDialog extends DialogWrapper {
     private JRadioButton orderDisabledRb;
     private JRadioButton orderFromInputRb;
     private JRadioButton orderFromFileRb;
+    private JRadioButton orderFromDragRb;
     private JTextArea orderInputTa;
     private JTextField orderFileTf;
     private JPanel orderModePanel;
     private JScrollPane orderInputScrollPane;
     private JPanel orderFilePanel;
     private JButton orderFileChooseBtn;
+    private JPanel orderCenterCard;
+    private JScrollPane orderDragScrollPane;
+    private JBList<String> orderTableList;
+    private DefaultListModel<String> orderListModel;
     private boolean orderPanelExpanded;
     private static final int ORDER_PANEL_BASE_WIDTH = 360;
     private static final int COLLAPSED_DIALOG_WIDTH = 780;
@@ -466,6 +474,8 @@ public class MainDialog extends DialogWrapper {
             orderedTableNames = readTableOrderFromInput();
         } else if (orderFromFileRb.isSelected()) {
             orderedTableNames = readTableOrderFromTxt();
+        } else if (orderFromDragRb != null && orderFromDragRb.isSelected()) {
+            orderedTableNames = readTableOrderFromDrag();
         } else {
             return true;
         }
@@ -484,6 +494,18 @@ public class MainDialog extends DialogWrapper {
 
     private List<String> readTableOrderFromInput() {
         return parseTableOrderLines(splitLines(orderInputTa == null ? "" : orderInputTa.getText()));
+    }
+
+    private @NotNull List<String> readTableOrderFromDrag() {
+        if (orderListModel == null) {
+            return new ArrayList<>();
+        }
+        int n = orderListModel.getSize();
+        List<String> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            out.add(orderListModel.getElementAt(i));
+        }
+        return out;
     }
 
     private List<String> splitLines(String value) {
@@ -508,24 +530,45 @@ public class MainDialog extends DialogWrapper {
         tableOrderPanel = new JPanel(new BorderLayout(0, 8));
         tableOrderPanel.setBorder(JBUI.Borders.empty(8));
 
-        orderModePanel = new JPanel(new GridLayout(3, 1, 0, 4));
+        orderModePanel = new JPanel(new GridLayout(4, 1, 0, 4));
         orderModePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.source")));
         orderDisabledRb = new JRadioButton(I18nKit.t("sort.disabled"), true);
         orderFromInputRb = new JRadioButton(I18nKit.t("sort.input"));
         orderFromFileRb = new JRadioButton(I18nKit.t("sort.file"));
+        orderFromDragRb = new JRadioButton(I18nKit.t("sort.drag"));
         ButtonGroup sourceGroup = new ButtonGroup();
         sourceGroup.add(orderDisabledRb);
         sourceGroup.add(orderFromInputRb);
         sourceGroup.add(orderFromFileRb);
+        sourceGroup.add(orderFromDragRb);
         orderModePanel.add(orderDisabledRb);
         orderModePanel.add(orderFromInputRb);
         orderModePanel.add(orderFromFileRb);
+        orderModePanel.add(orderFromDragRb);
 
         orderInputTa = new JTextArea(10, 20);
         orderInputTa.setLineWrap(true);
         orderInputTa.setWrapStyleWord(true);
         orderInputScrollPane = new JScrollPane(orderInputTa);
         orderInputScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.input.title")));
+
+        orderListModel = new DefaultListModel<>();
+        for (String name : defaultTableNameOrder()) {
+            orderListModel.addElement(name);
+        }
+        orderTableList = new JBList<>(orderListModel);
+        orderTableList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                String name = value == null ? "" : value.toString();
+                String text = (index + 1) + ". " + name;
+                return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
+            }
+        });
+        JListReorderUtil.install(orderTableList, orderListModel);
+        orderDragScrollPane = new JScrollPane(orderTableList);
+        orderDragScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.drag.title")));
 
         orderFilePanel = new JPanel(new BorderLayout(6, 0));
         orderFilePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.file.title")));
@@ -535,9 +578,13 @@ public class MainDialog extends DialogWrapper {
         orderFilePanel.add(orderFileTf, BorderLayout.CENTER);
         orderFilePanel.add(orderFileChooseBtn, BorderLayout.EAST);
 
+        orderCenterCard = new JPanel(new CardLayout());
+        orderCenterCard.add(orderInputScrollPane, "input");
+        orderCenterCard.add(orderDragScrollPane, "drag");
+
         JPanel body = new JPanel(new BorderLayout(0, 8));
         body.add(orderModePanel, BorderLayout.NORTH);
-        body.add(orderInputScrollPane, BorderLayout.CENTER);
+        body.add(orderCenterCard, BorderLayout.CENTER);
         body.add(orderFilePanel, BorderLayout.SOUTH);
         tableOrderPanel.add(body, BorderLayout.CENTER);
         refreshOrderInputsEnabled();
@@ -545,7 +592,32 @@ public class MainDialog extends DialogWrapper {
         orderDisabledRb.addActionListener(e -> refreshOrderInputsEnabled());
         orderFromInputRb.addActionListener(e -> refreshOrderInputsEnabled());
         orderFromFileRb.addActionListener(e -> refreshOrderInputsEnabled());
+        orderFromDragRb.addActionListener(e -> refreshOrderInputsEnabled());
         return tableOrderPanel;
+    }
+
+    /**
+     * 数据源/命名空间/表遍历中的首次出现顺序，同名表去重，与多行/文件排序语义一致。
+     */
+    private @NotNull List<String> defaultTableNameOrder() {
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (DataSourceDTO ds : dataSources) {
+            if (ds == null || CollectionUtils.isEmpty(ds.getNamespaces())) {
+                continue;
+            }
+            for (NamespaceDTO ns : ds.getNamespaces()) {
+                if (ns == null || CollectionUtils.isEmpty(ns.getTables())) {
+                    continue;
+                }
+                for (TableDTO t : ns.getTables()) {
+                    if (t == null || StringUtils.isBlank(t.getName())) {
+                        continue;
+                    }
+                    unique.add(t.getName());
+                }
+            }
+        }
+        return new ArrayList<>(unique);
     }
 
     private void chooseOrderFile() {
@@ -563,11 +635,27 @@ public class MainDialog extends DialogWrapper {
     private void refreshOrderInputsEnabled() {
         boolean enableInput = orderFromInputRb != null && orderFromInputRb.isSelected();
         boolean enableFile = orderFromFileRb != null && orderFromFileRb.isSelected();
+        boolean enableDrag = orderFromDragRb != null && orderFromDragRb.isSelected();
         if (orderInputTa != null) {
             orderInputTa.setEnabled(enableInput);
         }
         if (orderFileTf != null) {
             orderFileTf.setEnabled(enableFile);
+        }
+        if (orderFileChooseBtn != null) {
+            orderFileChooseBtn.setEnabled(enableFile);
+        }
+        if (orderCenterCard != null) {
+            CardLayout cl = (CardLayout) orderCenterCard.getLayout();
+            if (enableDrag) {
+                cl.show(orderCenterCard, "drag");
+            } else {
+                cl.show(orderCenterCard, "input");
+            }
+        }
+        if (orderTableList != null) {
+            orderTableList.setEnabled(enableDrag);
+            orderTableList.setDragEnabled(enableDrag);
         }
     }
 
@@ -642,8 +730,14 @@ public class MainDialog extends DialogWrapper {
         if (orderFromFileRb != null) {
             orderFromFileRb.setText(I18nKit.t("sort.file"));
         }
+        if (orderFromDragRb != null) {
+            orderFromDragRb.setText(I18nKit.t("sort.drag"));
+        }
         if (orderInputScrollPane != null) {
             orderInputScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.input.title")));
+        }
+        if (orderDragScrollPane != null) {
+            orderDragScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.drag.title")));
         }
         if (orderFilePanel != null) {
             orderFilePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.file.title")));

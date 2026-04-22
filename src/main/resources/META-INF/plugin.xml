@@ -17,19 +17,14 @@
     <tag>EasyDoc,Database To Word,doc generate,doc tools</tag>
       <h3>English:</h3>
       <ul>
-      <li>The database document generation plug-in based on IntelliJ IDEA is developed to support custom templates (word).</li>
+      <li>IntelliJ IDEA plugin to generate database documentation as Word (.docx) with poi-tl, using built-in or custom templates. Open from the Database tool window; see in-IDE help (?) for template variables.</li>
+      <li>Features: multi-selection (tables, views, materialized views, or schemas), editable DB comments, title/author/version/save path, optional table ordering (off, text lines, UTF-8 file, or drag list with multi-select), Chinese/English UI.</li>
       </ul>
       <h3>中文：</h3>
       <ul>
-      <li>基于IntelliJ IDEA开发的数据库文档生成插件，支持自定义Word模板。</li>
-
-      <li>
-      Features：
-        1. 支持使用默认内置的模板文件或者根据模板说明自己编写自定义的模板；
-        2. 支持同时选择多个数据源的数据库或者表；
-        3. 支持对于已选择的数据库进行备注说明；
-        4. 支持配置额外的信息，如：文档名称、作者、版本号等；
-      </li>
+      <li>基于 IntelliJ IDEA 的数据库文档 Word（.docx）生成插件，使用 poi-tl 模板引擎，支持默认或自定义模板。在 Database 工具窗口中选中库表或 Schema 后从菜单进入；主界面「?」可查看完整模板变量与排序说明。</li>
+      <li>功能：多选表/视图/物化视图或命名空间、编辑数据库/Schema 说明、配置文档标题/作者/版本与保存目录、中/英界面、可选的表顺序（不排序、多行、TXT 文件、可拖动并支持多选列表；同名表等规则与内置帮助一致）。</li>
+      </ul>
   ]]></description>
 
     <!-- Product and plugin compatibility requirements.

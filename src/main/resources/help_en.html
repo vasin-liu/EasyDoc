@@ -71,10 +71,12 @@
                         <li><b>Disable Sort</b>: keep original order (default).</li>
                         <li><b>Multi-line Input</b>: one table name per line; empty lines and <code>#</code> comments are supported.</li>
                         <li><b>TXT File</b>: load a UTF-8 text file with one table name per line.</li>
+                        <li><b>Drag in List</b>: the list shows all table names, initialized in <i>first-seen</i> metadata order, with the same <b>name de-duplication</b> as multi-line/TXT. <b>Multi-select</b> a block and <b>drag and drop</b> it to a new insert position. The <code>number.</code> prefix on each line is for display only; the actual order key is still the table name string.</li>
                     </ol>
                 </li>
                 <li>Rule: matched tables are ordered by your list; unmatched tables are appended after them.</li>
                 <li>Sorting is case-insensitive; duplicate table names are deduplicated (first occurrence wins).</li>
+                <li>If the same table name exists in different schemas, ordering uses the <b>table name</b> as the key (same as multi-line, TXT, and the list), which may be ambiguous; adjust your expectations accordingly.</li>
             </ol>
         </li>
     </ol>
