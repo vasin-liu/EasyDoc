@@ -10,6 +10,8 @@ import com.intellij.database.model.ObjectKind;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.gensokyo.plugin.easydoc.kit.DocRenderKit;
+import org.gensokyo.plugin.easydoc.plan.DocPlan;
+import org.gensokyo.plugin.easydoc.plan.PlanRenderContextBuilder;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ public class DocOptions {
     private String savePath;
     private Collection<DataSourceDTO> dataSources;
     private Collection<NamespaceDTO> namespaces;
+    private DocPlan docPlan;
 
     // 映射阿拉伯数字到中文数字
     private static final Map<Character, String> CHINESE_NUMBER_MAP = new HashMap<>();
@@ -101,6 +104,7 @@ public class DocOptions {
         map.put("namespacesMaterializedViews", nsMaterialized);
         map.put("ds4tableMaterializedViews", dsMaterialized);
         map.put("ns4tableMaterializedViews", nsMaterialized);
+        map.putAll(PlanRenderContextBuilder.build(docPlan));
         return map;
     }
 

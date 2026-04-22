@@ -79,6 +79,51 @@
                 <li>If the same table name exists in different schemas, ordering uses the <b>table name</b> as the key (same as multi-line, TXT, and the list), which may be ambiguous; adjust your expectations accordingly.</li>
             </ol>
         </li>
+        <li>Plan variables quick reference (poi-tl):
+            <ol>
+                <li>Core plan variables:
+                    <ol>
+                        <li>{{plan}}: full plan tree (root list in <code>plan.roots</code>).</li>
+                        <li>{{vars}}: compatibility map; parent variable value is <code>List&lt;DocNode&gt;</code>, leaf variable value is <code>DocNode</code>.</li>
+                        <li>{{varNodes}}: unified node map; both parent and leaf variables resolve to <code>DocNode</code>.</li>
+                        <li>{{varItems}}: unified list map; both parent and leaf variables resolve to <code>List&lt;DocNode&gt;</code> (leaf variables are single-item lists).</li>
+                    </ol>
+                </li>
+                <li>Prefer <code>{{varItems.xxx}}</code> for loop rendering (same semantics for parent and leaf variables).</li>
+                <li>Prefer <code>{{varNodes.xxx}}</code> for node metadata (display name, type, variable name, etc.).</li>
+                <li>Common <code>DocNode</code> fields:
+                    <ol>
+                        <li><code>displayName</code></li>
+                        <li><code>type</code> (GROUP / DATABASE / NAMESPACE / TABLE / VIEW / MAT_VIEW)</li>
+                        <li><code>variableName</code></li>
+                        <li><code>order</code></li>
+                        <li><code>enabled</code></li>
+                        <li><code>ref.dataSource / ref.namespace / ref.objectName / ref.objectKind</code></li>
+                    </ol>
+                </li>
+                <li>Semantics:
+                    <ol>
+                        <li>If a node is disabled (<code>enabled=false</code>), it is excluded from <code>vars / varNodes / varItems</code>.</li>
+                        <li>For a parent variable, <code>varItems</code> represents all enabled descendant leaf nodes.</li>
+                        <li>For a leaf variable, <code>varItems</code> is a single-item list, which keeps templates consistent.</li>
+                    </ol>
+                </li>
+                <li>Examples:
+                    <ol>
+                        <li>Group title: <code>{{varNodes.core_group.displayName}}</code></li>
+                        <li>Group loop:
+                            <code>{{#varItems.core_group}} ... {{displayName}} / {{type}} ... {{/varItems.core_group}}</code>
+                        </li>
+                        <li>Single-table unified loop:
+                            <code>{{#varItems.table_user}} ... {{ref.namespace}} ... {{/varItems.table_user}}</code>
+                        </li>
+                        <li>Full tree traversal:
+                            <code>{{#plan.roots}} ... {{displayName}} ... {{#children}} ... {{/children}} {{/plan.roots}}</code>
+                        </li>
+                    </ol>
+                </li>
+            </ol>
+        </li>
     </ol>
 </div>
 </body>

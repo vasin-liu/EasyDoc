@@ -31,7 +31,12 @@ import org.gensokyo.plugin.easydoc.kit.DocKit;
 import org.gensokyo.plugin.easydoc.kit.I18nKit;
 import org.gensokyo.plugin.easydoc.kit.ProjectKit;
 import org.gensokyo.plugin.easydoc.kit.TableKit;
+import org.gensokyo.plugin.easydoc.plan.DocPlan;
+import org.gensokyo.plugin.easydoc.plan.DocPlanBuilder;
+import org.gensokyo.plugin.easydoc.plan.PlanValidationResult;
+import org.gensokyo.plugin.easydoc.plan.PlanValidator;
 import org.gensokyo.plugin.easydoc.ui.component.CommonTableModel;
+import org.gensokyo.plugin.easydoc.ui.component.PlanTreePanel;
 import org.gensokyo.plugin.easydoc.ui.component.JListReorderUtil;
 import org.gensokyo.plugin.easydoc.ui.component.WordFileChooserDescriptor;
 import org.jetbrains.annotations.NotNull;
@@ -119,6 +124,7 @@ public class MainDialog extends DialogWrapper {
 
     private final Collection<DataSourceDTO> dataSources;
     private JSplitPane splitPane;
+    private JPanel leftConfigPanel;
     private JPanel tableOrderPanel;
     private JRadioButton orderDisabledRb;
     private JRadioButton orderFromInputRb;
@@ -135,13 +141,15 @@ public class MainDialog extends DialogWrapper {
     private JBList<String> orderTableList;
     private DefaultListModel<String> orderListModel;
     private boolean orderPanelExpanded;
-    private static final int ORDER_PANEL_BASE_WIDTH = 360;
-    private static final int COLLAPSED_DIALOG_WIDTH = 780;
-    private static final int DIALOG_HEIGHT = 500;
+    private static final int ORDER_PANEL_BASE_WIDTH = 440;
+    private static final int COLLAPSED_DIALOG_WIDTH = 860;
+    private static final int DIALOG_HEIGHT = 620;
     private int collapsedDialogWidth = -1;
     private Action sortToggleAction;
     private Timer panelAnimationTimer;
     private boolean languageUpdating;
+    private DocPlan docPlan;
+    private PlanTreePanel planTreePanel;
 
 
     @Override
@@ -151,7 +159,7 @@ public class MainDialog extends DialogWrapper {
             splitPane.setBorder(BorderFactory.createEmptyBorder());
             splitPane.setResizeWeight(0);
             splitPane.setContinuousLayout(true);
-            splitPane.setLeftComponent(buildOrderConfigPanel());
+            splitPane.setLeftComponent(buildLeftConfigPanel());
             splitPane.setRightComponent(this.contentPane);
             splitPane.setDividerSize(0);
             splitPane.setDividerLocation(0);
@@ -173,6 +181,7 @@ public class MainDialog extends DialogWrapper {
         I18nKit.setLocale(Locale.SIMPLIFIED_CHINESE);
         this.project = project;
         this.dataSources = dataSources;
+        this.docPlan = DocPlanBuilder.fromDataSources(dataSources);
         // CRITICAL: Release DB PSI/model references BEFORE UI initialization to allow
         // ModelMemoryManager to compact memory early, especially for 100+ tables/views.
         dataSources.forEach(DataSourceDTO::prepareForRender);
@@ -418,6 +427,13 @@ public class MainDialog extends DialogWrapper {
         if (!applyTableOrderFromPanel()) {
             return;
         }
+        this.docPlan = planTreePanel == null ? DocPlanBuilder.fromDataSources(dataSources) : planTreePanel.toDocPlan();
+        PlanValidationResult validationResult = PlanValidator.validateAndNormalize(this.docPlan);
+        if (!validationResult.isValid()) {
+            String detail = validationResult.getErrors().isEmpty() ? I18nKit.t("dialog.warn.plan.variable.invalid") : validationResult.getErrors().get(0);
+            Messages.showWarningDialog(I18nKit.t("dialog.warn.plan.invalid") + "\n" + detail, I18nKit.t("app.title"));
+            return;
+        }
 
         DocOptions opts = DocOptions.of()
                 .template(is)
@@ -426,7 +442,8 @@ public class MainDialog extends DialogWrapper {
                 .version(docVersion)
                 .savePath(savePath)
                 .dataSources(dataSources)
-                .namespaces(namespaces);
+                .namespaces(namespaces)
+                .docPlan(docPlan);
 
         if (createDoc(opts)) {
             Messages.showInfoMessage(I18nKit.t("dialog.success"), I18nKit.t("app.title"));
@@ -524,6 +541,17 @@ public class MainDialog extends DialogWrapper {
             Messages.showWarningDialog(I18nKit.t("dialog.warn.order.file"), I18nKit.t("app.title"));
             return null;
         }
+    }
+
+    private JPanel buildLeftConfigPanel() {
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab(I18nKit.t("button.sort.config"), buildOrderConfigPanel());
+        planTreePanel = new PlanTreePanel(docPlan);
+        tabs.addTab(I18nKit.t("label.plan.structure"), planTreePanel);
+        leftConfigPanel = new JPanel(new BorderLayout());
+        leftConfigPanel.add(tabs, BorderLayout.CENTER);
+        leftConfigPanel.setMinimumSize(new Dimension(JBUI.scale(ORDER_PANEL_BASE_WIDTH), JBUI.scale(420)));
+        return leftConfigPanel;
     }
 
     private JPanel buildOrderConfigPanel() {
@@ -755,7 +783,7 @@ public class MainDialog extends DialogWrapper {
 
     private int calculateOrderPanelWidth() {
         int dpiScaledBase = JBUI.scale(ORDER_PANEL_BASE_WIDTH);
-        int contentMinimumWidth = tableOrderPanel == null ? dpiScaledBase : tableOrderPanel.getMinimumSize().width;
+        int contentMinimumWidth = leftConfigPanel == null ? dpiScaledBase : leftConfigPanel.getMinimumSize().width;
         return Math.max(dpiScaledBase, contentMinimumWidth);
     }
 

@@ -79,6 +79,51 @@
                 <li>若不同 schema 下存在同名表，排序以<b>表名</b>为键，与多行/TXT/列表一致，请注意与 schema 的对应关系是否满足你的预期。</li>
             </ol>
         </li>
+        <li>结构编排变量速查（poi-tl）：
+            <ol>
+                <li>核心新增变量：
+                    <ol>
+                        <li>{{plan}}：完整编排树（根节点列表在 <code>plan.roots</code>）。</li>
+                        <li>{{vars}}：兼容变量映射；父节点变量值为 <code>List&lt;DocNode&gt;</code>，叶子变量值为 <code>DocNode</code>。</li>
+                        <li>{{varNodes}}：统一节点映射，父/叶均返回 <code>DocNode</code>。</li>
+                        <li>{{varItems}}：统一集合映射，父/叶均返回 <code>List&lt;DocNode&gt;</code>（叶子为单元素列表）。</li>
+                    </ol>
+                </li>
+                <li>推荐优先使用 <code>{{varItems.xxx}}</code> 做循环渲染（父/叶语义一致）。</li>
+                <li>推荐使用 <code>{{varNodes.xxx}}</code> 读取节点元信息（显示名称、类型、变量名等）。</li>
+                <li>常用节点字段：
+                    <ol>
+                        <li><code>displayName</code> 显示名称</li>
+                        <li><code>type</code> 节点类型（GROUP / DATABASE / NAMESPACE / TABLE / VIEW / MAT_VIEW）</li>
+                        <li><code>variableName</code> 变量名</li>
+                        <li><code>order</code> 同级排序号</li>
+                        <li><code>enabled</code> 是否启用</li>
+                        <li><code>ref.dataSource / ref.namespace / ref.objectName / ref.objectKind</code> 对象来源信息</li>
+                    </ol>
+                </li>
+                <li>语义规则：
+                    <ol>
+                        <li>节点被禁用（<code>enabled=false</code>）后，不会进入 <code>vars / varNodes / varItems</code>。</li>
+                        <li>父节点变量在 <code>varItems</code> 中表示其“所有启用后代叶子节点”的聚合结果。</li>
+                        <li>叶子节点变量在 <code>varItems</code> 中为单元素列表，便于统一模板写法。</li>
+                    </ol>
+                </li>
+                <li>示例（可直接参考）：
+                    <ol>
+                        <li>分组标题：<code>{{varNodes.core_group.displayName}}</code></li>
+                        <li>分组循环：
+                            <code>{{#varItems.core_group}} ... {{displayName}} / {{type}} ... {{/varItems.core_group}}</code>
+                        </li>
+                        <li>单表统一写法：
+                            <code>{{#varItems.table_user}} ... {{ref.namespace}} ... {{/varItems.table_user}}</code>
+                        </li>
+                        <li>整棵树遍历：
+                            <code>{{#plan.roots}} ... {{displayName}} ... {{#children}} ... {{/children}} {{/plan.roots}}</code>
+                        </li>
+                    </ol>
+                </li>
+            </ol>
+        </li>
     </ol>
 </div>
 </body>

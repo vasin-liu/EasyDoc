@@ -15,9 +15,11 @@ import org.gensokyo.plugin.easydoc.kit.DbPartitionKit;
 import org.gensokyo.plugin.easydoc.kit.DerivedCommentInheritanceKit;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -44,6 +46,7 @@ public class NamespaceDTO implements Item<NamespaceDTO> {
         list = filterLikelyPartitionChildTablesByName(list);
         appendObjectsByKind(namespace, ObjectKind.VIEW, list);
         appendObjectsByKind(namespace, ObjectKind.MAT_VIEW, list);
+        list = dedupeByLogicalKey(list);
         if (!list.isEmpty()) {
             tables.addAll(list);
         }
@@ -141,6 +144,26 @@ public class NamespaceDTO implements Item<NamespaceDTO> {
     /** 常见分区物理表后缀：日期/批次纯数字（6～14 位）、p+数字 */
     private static boolean looksLikePartitionTableSuffix(String suffix) {
         return suffix.matches("\\d{6,14}") || suffix.matches("(?i)p\\d+");
+    }
+
+    /**
+     * IDEA 某些方言/驱动下可能返回重复对象，按 schema + objectKind + name 去重，保留首次出现顺序。
+     */
+    private static List<TableDTO> dedupeByLogicalKey(List<TableDTO> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return tables == null ? new ArrayList<>() : tables;
+        }
+        Map<String, TableDTO> unique = new LinkedHashMap<>();
+        for (TableDTO t : tables) {
+            if (t == null) {
+                continue;
+            }
+            String key = StringUtils.defaultString(t.getSchema()).toLowerCase(Locale.ROOT) + "|"
+                    + (t.getObjectKind() == null ? "" : t.getObjectKind().name()) + "|"
+                    + StringUtils.defaultString(t.getName()).toLowerCase(Locale.ROOT);
+            unique.putIfAbsent(key, t);
+        }
+        return new ArrayList<>(unique.values());
     }
 
     /**
