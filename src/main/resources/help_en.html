@@ -39,7 +39,7 @@
                                     <ol>
                                         <li>das raw object</li>
                                         <li>name object name</li>
-                                        <li>comment object comment</li>
+                                        <li>comment table/view/materialized view comment. When sorting is enabled, the sort panel can set a <b>this-run-only</b> label by table name; the template still reads it here. Not persisted; see <b>Table label</b> in the sort section below for precedence and limits.</li>
                                         <li>objectKind type (TABLE/VIEW/MATERIALIZED_VIEW)</li>
                                         <li>schema schema name</li>
                                         <li>primaryKey primary key</li>
@@ -69,11 +69,12 @@
                 <li>Sort source options:
                     <ol>
                         <li><b>Disable Sort</b>: keep original order (default).</li>
-                        <li><b>Multi-line Input</b>: one table name per line; empty lines and <code>#</code> comments are supported.</li>
-                        <li><b>TXT File</b>: load a UTF-8 text file with one table name per line.</li>
-                        <li><b>Drag in List</b>: the list shows all table names, initialized in <i>first-seen</i> metadata order, with the same <b>name de-duplication</b> as multi-line/TXT. <b>Multi-select</b> a block and <b>drag and drop</b> it to a new insert position. The <code>number.</code> prefix on each line is for display only; the actual order key is still the table name string.</li>
+                        <li><b>Multi-line Input</b>: one table name per line; empty lines and <code>#</code> comments are supported. You may also use <code>tableName|label for this run</code>: only the <b>first</b> <code>|</code> splits the name and the label; the label may contain more <code>|</code> characters. Hover the text area for a tooltip.</li>
+                        <li><b>TXT File</b>: same line rules as multi-line in UTF-8 (including <code>name|label</code> lines).</li>
+                        <li><b>Drag in List</b>: the list shows all table names, initialized in <i>first-seen</i> metadata order, with the same <b>name de-duplication</b> as multi-line/TXT. <b>Multi-select</b> a block and <b>drag and drop</b> it to a new insert position. <b>Double-click</b> a row or use <b>Set label…</b> to set or clear a <b>this-run-only</b> table label. The <code>number.</code> prefix on each line is for display only; the actual order key is still the table name string.</li>
                     </ol>
                 </li>
+                <li><b>Table label (same key as sort, this run only)</b>: when sorting is enabled, if you set a non-empty per-table label, the <code>comment</code> value exposed in the Word template for that table/object <b>prefers the label</b> over the database/inherited comment. This override is <b>not</b> written back to the DB or project settings. Like sorting, the key is the <b>table name</b> (case-insensitive). If the same name exists in more than one schema, you <b>cannot</b> disambiguate by schema; plan accordingly.</li>
                 <li>Rule: matched tables are ordered by your list; unmatched tables are appended after them.</li>
                 <li>Sorting is case-insensitive; duplicate table names are deduplicated (first occurrence wins).</li>
                 <li>If the same table name exists in different schemas, ordering uses the <b>table name</b> as the key (same as multi-line, TXT, and the list), which may be ambiguous; adjust your expectations accordingly.</li>

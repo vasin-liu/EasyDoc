@@ -25,12 +25,14 @@ import org.gensokyo.plugin.easydoc.dto.DefaultTemplateTypeDTO;
 import org.gensokyo.plugin.easydoc.dto.DocOptions;
 import org.gensokyo.plugin.easydoc.dto.NamespaceDTO;
 import org.gensokyo.plugin.easydoc.dto.TableDTO;
+import org.gensokyo.plugin.easydoc.dto.TableOrderEntry;
 import org.gensokyo.plugin.easydoc.factory.AbstractCellEditorFactory;
 import org.gensokyo.plugin.easydoc.kit.DerivedCommentInheritanceKit;
 import org.gensokyo.plugin.easydoc.kit.DocKit;
 import org.gensokyo.plugin.easydoc.kit.I18nKit;
 import org.gensokyo.plugin.easydoc.kit.ProjectKit;
 import org.gensokyo.plugin.easydoc.kit.TableKit;
+import org.gensokyo.plugin.easydoc.kit.TableOrderInputKit;
 import org.gensokyo.plugin.easydoc.plan.DocPlan;
 import org.gensokyo.plugin.easydoc.plan.DocPlanBuilder;
 import org.gensokyo.plugin.easydoc.plan.PlanValidationResult;
@@ -47,6 +49,8 @@ import javax.swing.Action;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.table.TableCellEditor;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -138,8 +142,9 @@ public class MainDialog extends DialogWrapper {
     private JButton orderFileChooseBtn;
     private JPanel orderCenterCard;
     private JScrollPane orderDragScrollPane;
-    private JBList<String> orderTableList;
-    private DefaultListModel<String> orderListModel;
+    private JButton orderDisplayEditBtn;
+    private JBList<TableOrderEntry> orderTableList;
+    private DefaultListModel<TableOrderEntry> orderListModel;
     private boolean orderPanelExpanded;
     private static final int ORDER_PANEL_BASE_WIDTH = 440;
     private static final int COLLAPSED_DIALOG_WIDTH = 860;
@@ -482,60 +487,66 @@ public class MainDialog extends DialogWrapper {
     }
 
     private boolean applyTableOrderFromPanel() {
+        TableOrderInputKit.clearSortDisplayOverrides(dataSources);
         if (orderDisabledRb == null || orderDisabledRb.isSelected()) {
             return true;
         }
 
-        List<String> orderedTableNames;
+        TableOrderInputKit.Result orderResult;
         if (orderFromInputRb.isSelected()) {
-            orderedTableNames = readTableOrderFromInput();
+            orderResult = TableOrderInputKit.parseLines(splitLines(orderInputTa == null ? "" : orderInputTa.getText()));
         } else if (orderFromFileRb.isSelected()) {
-            orderedTableNames = readTableOrderFromTxt();
+            orderResult = readTableOrderFromTxt();
         } else if (orderFromDragRb != null && orderFromDragRb.isSelected()) {
-            orderedTableNames = readTableOrderFromDrag();
+            orderResult = readTableOrderFromDrag();
         } else {
             return true;
         }
 
-        if (orderedTableNames == null) {
+        if (orderResult == null) {
             Messages.showWarningDialog(I18nKit.t("dialog.warn.order.invalid"), I18nKit.t("app.title"));
             return false;
         }
-        if (orderedTableNames.isEmpty()) {
+        if (orderResult.order().isEmpty()) {
             Messages.showWarningDialog(I18nKit.t("dialog.warn.order.empty"), I18nKit.t("app.title"));
             return false;
         }
-        applyTableOrder(orderedTableNames);
+        applyTableOrder(orderResult);
         return true;
     }
 
-    private List<String> readTableOrderFromInput() {
-        return parseTableOrderLines(splitLines(orderInputTa == null ? "" : orderInputTa.getText()));
-    }
-
-    private @NotNull List<String> readTableOrderFromDrag() {
+    private TableOrderInputKit.Result readTableOrderFromDrag() {
         if (orderListModel == null) {
-            return new ArrayList<>();
+            return new TableOrderInputKit.Result(new ArrayList<>(), Map.of());
         }
         int n = orderListModel.getSize();
-        List<String> out = new ArrayList<>(n);
+        List<String> order = new ArrayList<>(n);
+        Map<String, String> display = new HashMap<>();
         for (int i = 0; i < n; i++) {
-            out.add(orderListModel.getElementAt(i));
+            TableOrderEntry e = orderListModel.getElementAt(i);
+            if (e == null || StringUtils.isBlank(e.getTableName())) {
+                continue;
+            }
+            order.add(e.getTableName().trim());
+            if (StringUtils.isNotBlank(e.getDisplayComment())) {
+                String k = e.getTableName().toLowerCase(Locale.ROOT);
+                display.putIfAbsent(k, e.getDisplayComment().trim());
+            }
         }
-        return out;
+        return new TableOrderInputKit.Result(order, display.isEmpty() ? Map.of() : display);
     }
 
     private List<String> splitLines(String value) {
         return Arrays.asList(value.split("\\R"));
     }
 
-    private List<String> readTableOrderFromTxt() {
+    private @Nullable TableOrderInputKit.Result readTableOrderFromTxt() {
         if (StringUtils.isBlank(orderFileTf == null ? null : orderFileTf.getText())) {
             return null;
         }
         try {
             List<String> lines = Files.readAllLines(Paths.get(orderFileTf.getText().trim()), StandardCharsets.UTF_8);
-            return parseTableOrderLines(lines);
+            return TableOrderInputKit.parseLines(lines);
         } catch (Exception e) {
             LOG.error("读取表顺序文件失败: " + orderFileTf.getText(), e);
             Messages.showWarningDialog(I18nKit.t("dialog.warn.order.file"), I18nKit.t("app.title"));
@@ -579,24 +590,47 @@ public class MainDialog extends DialogWrapper {
         orderInputTa.setWrapStyleWord(true);
         orderInputScrollPane = new JScrollPane(orderInputTa);
         orderInputScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.input.title")));
+        orderInputTa.setToolTipText(I18nKit.t("sort.format.tooltip"));
 
         orderListModel = new DefaultListModel<>();
         for (String name : defaultTableNameOrder()) {
-            orderListModel.addElement(name);
+            orderListModel.addElement(new TableOrderEntry(name));
         }
         orderTableList = new JBList<>(orderListModel);
         orderTableList.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(
                     JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                String name = value == null ? "" : value.toString();
-                String text = (index + 1) + ". " + name;
-                return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
+                String line;
+                if (value instanceof TableOrderEntry e) {
+                    String name = e.getTableName() == null ? "" : e.getTableName();
+                    line = (index + 1) + ". " + name;
+                    if (StringUtils.isNotBlank(e.getDisplayComment())) {
+                        line += "  |  " + I18nKit.t("sort.display.short") + ": " + e.getDisplayComment();
+                    }
+                } else {
+                    line = (index + 1) + ". " + (value == null ? "" : value);
+                }
+                return super.getListCellRendererComponent(list, line, index, isSelected, cellHasFocus);
             }
         });
         JListReorderUtil.install(orderTableList, orderListModel);
+        orderTableList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    editSelectedTableOrderEntryDisplay();
+                }
+            }
+        });
         orderDragScrollPane = new JScrollPane(orderTableList);
         orderDragScrollPane.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.drag.title")));
+        orderDisplayEditBtn = new JButton(I18nKit.t("sort.display.edit"));
+        orderDisplayEditBtn.addActionListener(e -> editSelectedTableOrderEntryDisplay());
+        JPanel orderDragBody = new JPanel(new BorderLayout(0, 4));
+        orderDragBody.add(orderDragScrollPane, BorderLayout.CENTER);
+        orderDisplayEditBtn.setToolTipText(I18nKit.t("sort.display.edit.tooltip"));
+        orderDragBody.add(orderDisplayEditBtn, BorderLayout.SOUTH);
 
         orderFilePanel = new JPanel(new BorderLayout(6, 0));
         orderFilePanel.setBorder(BorderFactory.createTitledBorder(I18nKit.t("sort.file.title")));
@@ -608,7 +642,7 @@ public class MainDialog extends DialogWrapper {
 
         orderCenterCard = new JPanel(new CardLayout());
         orderCenterCard.add(orderInputScrollPane, "input");
-        orderCenterCard.add(orderDragScrollPane, "drag");
+        orderCenterCard.add(orderDragBody, "drag");
 
         JPanel body = new JPanel(new BorderLayout(0, 8));
         body.add(orderModePanel, BorderLayout.NORTH);
@@ -773,6 +807,13 @@ public class MainDialog extends DialogWrapper {
         if (orderFileChooseBtn != null) {
             orderFileChooseBtn.setText(I18nKit.t("button.choose"));
         }
+        if (orderInputTa != null) {
+            orderInputTa.setToolTipText(I18nKit.t("sort.format.tooltip"));
+        }
+        if (orderDisplayEditBtn != null) {
+            orderDisplayEditBtn.setText(I18nKit.t("sort.display.edit"));
+            orderDisplayEditBtn.setToolTipText(I18nKit.t("sort.display.edit.tooltip"));
+        }
     }
 
     private void refreshSortActionText() {
@@ -787,22 +828,8 @@ public class MainDialog extends DialogWrapper {
         return Math.max(dpiScaledBase, contentMinimumWidth);
     }
 
-    private List<String> parseTableOrderLines(List<String> lines) {
-        LinkedHashSet<String> names = new LinkedHashSet<>();
-        for (String line : lines) {
-            if (line == null) {
-                continue;
-            }
-            String tableName = line.trim();
-            if (tableName.isEmpty() || tableName.startsWith("#")) {
-                continue;
-            }
-            names.add(tableName);
-        }
-        return new ArrayList<>(names);
-    }
-
-    private void applyTableOrder(List<String> orderedTableNames) {
+    private void applyTableOrder(TableOrderInputKit.Result result) {
+        List<String> orderedTableNames = result.order();
         Map<String, Integer> orderIndex = new HashMap<>();
         for (int i = 0; i < orderedTableNames.size(); i++) {
             orderIndex.putIfAbsent(orderedTableNames.get(i).toLowerCase(Locale.ROOT), i);
@@ -818,6 +845,64 @@ public class MainDialog extends DialogWrapper {
                     .collect(Collectors.toCollection(ArrayList::new));
             ds.setNamespaces(sortedNamespaces);
         }
+        applySortDisplayForTables(result.displayByTableNameLower());
+    }
+
+    private void applySortDisplayForTables(Map<String, String> displayByTableNameLower) {
+        if (displayByTableNameLower == null || displayByTableNameLower.isEmpty()) {
+            return;
+        }
+        for (DataSourceDTO ds : dataSources) {
+            if (CollectionUtils.isEmpty(ds.getNamespaces())) {
+                continue;
+            }
+            for (NamespaceDTO ns : ds.getNamespaces()) {
+                if (CollectionUtils.isEmpty(ns.getTables())) {
+                    continue;
+                }
+                for (TableDTO t : ns.getTables()) {
+                    if (t == null || StringUtils.isBlank(t.getName())) {
+                        continue;
+                    }
+                    String v = displayByTableNameLower.get(t.getName().toLowerCase(Locale.ROOT));
+                    if (StringUtils.isNotBlank(v)) {
+                        t.setSortDisplayOverride(v);
+                    }
+                }
+            }
+        }
+    }
+
+    private void editSelectedTableOrderEntryDisplay() {
+        if (orderTableList == null || orderListModel == null) {
+            return;
+        }
+        int i = orderTableList.getSelectedIndex();
+        if (i < 0) {
+            Messages.showWarningDialog(project, I18nKit.t("sort.display.needSelect"), I18nKit.t("app.title"));
+            return;
+        }
+        TableOrderEntry ent = orderListModel.getElementAt(i);
+        if (ent == null || StringUtils.isBlank(ent.getTableName())) {
+            return;
+        }
+        String current = StringUtils.defaultString(ent.getDisplayComment());
+        String s = Messages.showInputDialog(
+                project,
+                I18nKit.t("sort.display.message", ent.getTableName()),
+                I18nKit.t("sort.display.title"),
+                Messages.getQuestionIcon(),
+                current,
+                null
+        );
+        if (s == null) {
+            return;
+        }
+        String trimmed = s.trim();
+        orderListModel.setElementAt(
+                new TableOrderEntry(ent.getTableName(), trimmed.isEmpty() ? null : trimmed),
+                i
+        );
     }
 
     private void sortTablesInNamespaces(List<NamespaceDTO> namespaces, Map<String, Integer> orderIndex) {
